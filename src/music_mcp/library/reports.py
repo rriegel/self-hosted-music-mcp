@@ -29,14 +29,13 @@ def library_status(conn: sqlite3.Connection) -> dict:
         "SELECT value FROM schema_meta WHERE key = 'last_scan'"
     ).fetchone()
 
-    tracks = totals["tracks"] or 0
     readable = totals["readable"] or 0
 
     def pct(n: int) -> float:
         return round(100 * n / readable, 1) if readable else 0.0
 
     return {
-        "tracks": tracks,
+        "tracks": totals["tracks"] or 0,
         "readable": readable,
         "artists": artists,
         "albums": albums,
@@ -101,39 +100,67 @@ def library_artists(conn: sqlite3.Connection, filter_mbid: str | None = None) ->
 
 
 def library_albums(conn: sqlite3.Connection, artist_ref: str) -> dict:
-    """Owned albums for one artist (by artist_mbid or exact artist tag name)."""
+    """Owned albums for one artist, by artist_mbid or artist name.
+
+    Name matching goes through the artists table (name -> MBID) so varied file
+    credits ('JPEGMAFIA feat. X', 'JPEGMAFIA x Danny Brown') still resolve to the
+    one artist's discography — the artist_mbid on the albums rows is the join key;
+    the credit string is not.
+    """
     by_mbid = conn.execute(
         "SELECT artist_mbid FROM artists WHERE artist_mbid = ?", (artist_ref,)
     ).fetchone()
     if by_mbid:
-        where, param = "t.artist_mbid = ?", artist_ref
+        resolved_mbid = artist_ref
+        matched_by = "artist_mbid"
     else:
-        where, param = "t.artist = ?", artist_ref
+        # Exact name first, then case-insensitive fallback (folder-derived names vary in case).
+        row = conn.execute(
+            """
+            SELECT artist_mbid FROM (
+                SELECT artist_mbid FROM artists WHERE name = ?
+                UNION ALL
+                SELECT artist_mbid FROM artists
+                WHERE name LIKE ? AND artist_mbid IS NOT NULL
+            ) LIMIT 1
+            """,
+            (artist_ref, artist_ref),
+        ).fetchone()
+        if not row or row["artist_mbid"] is None:
+            return {
+                "artist": artist_ref,
+                "matched_by": None,
+                "matched_note": "no artist with this name or mbid in the index",
+                "albums": [],
+                "count": 0,
+            }
+        resolved_mbid = row["artist_mbid"]
+        matched_by = "artist_name"
 
     rows = conn.execute(
-        f"""
+        """
         SELECT
             al.folder,
             al.album_mbid,
-            al.title,
+            COALESCE(al.title, al.folder) AS title,
             al.date,
             COUNT(t.path) AS tracks,
-            MIN(t.suffix) AS one_format_sample,
             GROUP_CONCAT(DISTINCT t.suffix) AS formats,
             MIN(t.date) AS min_track_date,
             MAX(t.date) AS max_track_date
-        FROM tracks t
-        LEFT JOIN albums al ON al.folder = t.parent_folder
-        WHERE {where}
-        GROUP BY t.parent_folder
+        FROM albums al
+        JOIN tracks t ON t.parent_folder = al.folder
+        WHERE al.artist_mbid = ?
+        GROUP BY al.folder
         ORDER BY al.date, al.title
         """,
-        (param,),
+        (resolved_mbid,),
     ).fetchall()
 
     return {
         "artist": artist_ref,
-        "matched_by": "artist_mbid" if by_mbid else "artist_name",
+        "artist_mbid": resolved_mbid,
+        "matched_by": matched_by,
         "albums": [
             {
                 "folder": row["folder"],

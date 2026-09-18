@@ -12,6 +12,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from mutagen.flac import FLAC
 
 from music_mcp.library import db as db_mod
 from music_mcp.library import reports, scanner
@@ -50,7 +51,7 @@ def test_scan_indexes_fixture_library(cache: sqlite3.Connection, sample_library:
     assert summary["added"] == 5
     assert summary["unreadable"] == 1  # garbage bad.mp3
     assert summary["unreadable_dirs"] == []
-    # 4 readable files: mp3(flac untagged? no—) tagged mp3, tagged flac, mystery mp3, m4a
+    # 4 readable files: tagged mp3, tagged flac, mystery mp3, m4a
     assert summary["with_artist_mbid"] == 3  # tagged mp3, flac, m4a
 
     tracks = cache.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
@@ -115,7 +116,7 @@ def test_artists_and_albums_reports(cache: sqlite3.Connection, sample_library: P
 
     missing = reports.library_artists(cache, filter_mbid="missing")
     missing_names = {a["name"] for a in missing["artists"]}
-    assert "Mystery Artist" in missing_names  # tagged but untagged artist name joins via name
+    assert "Mystery Artist" in missing_names  # folder-derived identity, no MBID
     assert TAGGED_MBID not in {a["artist_mbid"] for a in missing["artists"]}
 
     albums = reports.library_albums(cache, TAGGED_MBID)
@@ -125,3 +126,35 @@ def test_artists_and_albums_reports(cache: sqlite3.Connection, sample_library: P
     by_name = reports.library_albums(cache, "M4A Artist")
     assert by_name["matched_by"] == "artist_name"
     assert by_name["count"] == 1
+
+
+def test_albums_resolve_varied_artist_credits(cache: sqlite3.Connection, library_copy: Path):
+    """Regression (real-library bug): file credits vary ('Artist feat. X',
+    'Artist x Someone'); discography lookup must resolve via artist_mbid,
+    not exact credit-string equality."""
+    collab = library_copy / "Tagged Artist" / "Collab Album"
+    collab.mkdir(parents=True, exist_ok=True)
+    src = next((library_copy / "Tagged Artist" / "Album (2020)").glob("*.flac"))
+    dst = collab / "01 - With Someone.flac"
+    shutil.copy(src, dst)
+    flac = FLAC(dst)
+    flac["artist"] = "Tagged Artist feat. Someone"
+    flac["musicbrainz_artistid"] = TAGGED_MBID
+    flac["album"] = "Collab Album"  # own identity; same MBID across folders = dupe case
+    flac["musicbrainz_albumid"] = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+    flac.save()
+
+    scanner.scan_library(library_copy, cache)
+    result = reports.library_albums(cache, "Tagged Artist")
+    titles = {al["title"] for al in result["albums"]}
+    assert "Album (2020)" in titles
+    assert "Collab Album" in titles  # varied credit still resolves via mbid
+    assert result["count"] == 2
+    assert result["artist_mbid"] == TAGGED_MBID
+
+
+def test_albums_unknown_artist_reports_clearly(cache: sqlite3.Connection, sample_library: Path):
+    scanner.scan_library(sample_library, cache)
+    result = reports.library_albums(cache, "Nobody Known")
+    assert result["count"] == 0
+    assert result["matched_by"] is None
