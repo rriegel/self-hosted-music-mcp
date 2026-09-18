@@ -121,6 +121,7 @@ def scan_library(root: Path, conn, incremental: bool = True) -> dict:
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (now,),
     )
+    _refresh_canonical_names(conn)
     conn.commit()
 
     return {
@@ -137,9 +138,33 @@ def scan_library(root: Path, conn, incremental: bool = True) -> dict:
     }
 
 
+def _refresh_canonical_names(conn) -> None:
+    """Canonical display names for artists, recomputed after each scan.
+
+    File credits vary ('Drake', 'Drake feat. X', 'Drake & Y'); the stored name was
+    whichever credit the first scanned file happened to carry, so name lookups
+    ('albums \"Drake\"') missed. Canonical = shortest credit among the artist's own
+    tracks (bare name beats credit variants); most frequent wins ties. Computed
+    from the cache, so it repairs an existing index on the next scan — even an
+    incremental one that reads no new files.
+    """
+    conn.execute(
+        """
+        UPDATE artists SET name = (
+            SELECT t.artist FROM tracks t
+            WHERE t.artist_mbid = artists.artist_mbid AND t.artist IS NOT NULL
+            GROUP BY t.artist
+            ORDER BY LENGTH(t.artist) ASC, COUNT(*) DESC
+            LIMIT 1
+        )
+        WHERE artist_mbid IS NOT NULL
+          AND EXISTS (SELECT 1 FROM tracks t WHERE t.artist_mbid = artists.artist_mbid
+                      AND t.artist IS NOT NULL)
+        """
+    )
+
+
 def _track_row(path: Path, root: Path, st: os.stat_result, info: dict, now: str) -> tuple:
-    """Column order matches the INSERT in _commit_batch. Folder layout provides
-    fallback artist/album when tags are missing (untagged files keep identities)."""
     folder = album_folder(path, root)
     fallback_artist, fallback_album = folder_identity(folder)
     return (
