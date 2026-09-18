@@ -61,6 +61,28 @@ uncommitted `.env` file:
 Every value can also be passed as a CLI argument (`--help` shows which), which wins
 over the env var.
 
+## Library index (Phase 1)
+
+The offline index: walks your library, reads tags, and stores artists/albums/tracks
+in a SQLite (WAL) cache. Re-runs are incremental (unchanged files skipped via
+mtime+size); the library is only ever read.
+
+```sh
+export MUSIC_LIBRARY_ROOT="/path/to/music"        # your library mount (see Configuration)
+export MUSIC_DB="/path/to/music-index.db"         # where the cache lives (also: --db)
+
+uv run python -m music_mcp.library scan           # incremental scan into the cache
+uv run python -m music_mcp.library scan --full    # re-read every file, ignore mtimes
+uv run python -m music_mcp.library status         # counts, MBID coverage %, formats
+uv run python -m music_mcp.library artists --filter-mbid missing   # resolver worklist
+uv run python -m music_mcp.library albums "Artist Name"            # by MBID or tag name
+```
+
+What to expect: the first scan reads every audio file (several minutes over a network
+mount); a second `scan` right after should report `added: 0` with most files
+`unchanged` and finish in seconds. `status` shows the MBID coverage the resolver
+work in Phase 3 will improve.
+
 ## Spike (Phase 0)
 
 Read-only programs that were run against the real library to validate the MBID join
