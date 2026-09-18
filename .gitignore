@@ -19,3 +19,9 @@ htmlcov/
 
 # spike scripts only write files when --out is passed
 spike_*.json
+
+# local index caches (default location would otherwise be committable)
+library-index.db
+*.db
+*.db-wal
+*.db-shm
