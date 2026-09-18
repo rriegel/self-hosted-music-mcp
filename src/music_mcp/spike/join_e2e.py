@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from music_mcp.spike.mb_check import mb_get
 
-DEFAULT_LIBRARY_ROOT = "/beelink/mnt/terra-6tb-1/media/music"
 DEFAULT_SAMPLE = "spike_library_sample.json"
-DEFAULT_WATCHLIST = "/opt/data/scripts/music-release-radar/watchlist.json"
 
 
 def load_owned_artists(sample_path: Path) -> dict:
@@ -72,10 +71,19 @@ def resolve_artist_via_mb(name: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--library-sample", default=DEFAULT_SAMPLE)
-    parser.add_argument("--watchlist", default=DEFAULT_WATCHLIST)
+    parser.add_argument(
+        "--watchlist", default=os.environ.get("MUSIC_WATCHLIST"), help="default: $MUSIC_WATCHLIST"
+    )
     parser.add_argument("--mb-resolve", type=int, default=3, help="how many untagged artists to resolve via MB")
     parser.add_argument("--out", default=None, help="also write JSON to this path")
     args = parser.parse_args()
+
+    if not args.watchlist:
+        print(json.dumps({
+            "error": "no watchlist path given",
+            "hint": 'export MUSIC_WATCHLIST="/opt/data/scripts/music-release-radar/watchlist.json"',
+        }))
+        return 1
 
     owned = load_owned_artists(Path(args.library_sample))
     watchlist = load_watchlist(Path(args.watchlist))

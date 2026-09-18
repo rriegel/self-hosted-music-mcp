@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from collections import Counter
@@ -163,15 +164,27 @@ def sample_library(root: Path, max_artists: int, seed: int = 17) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sample_dir", nargs="?", default="/beelink/mnt/terra-6tb-1/media/music")
+    parser.add_argument(
+        "sample_dir", nargs="?", default=None, help="library root (default: $MUSIC_LIBRARY_ROOT)"
+    )
     parser.add_argument("--max-artists", type=int, default=40)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--out", type=Path, default=None, help="also write full JSON to this path")
     args = parser.parse_args()
 
-    root = Path(args.sample_dir)
+    root_specified = args.sample_dir or os.environ.get("MUSIC_LIBRARY_ROOT")
+    if not root_specified:
+        print(json.dumps({
+            "error": "no library root given",
+            "hint": 'pass it as an argument, or: export MUSIC_LIBRARY_ROOT="/mnt/terra-6tb-1/media/music"',
+        }))
+        return 1
+    root = Path(root_specified)
     if not root.is_dir():
-        print(json.dumps({"error": f"not a directory: {root}"}))
+        print(json.dumps({
+            "error": f"not a directory: {root}",
+            "hint": "is the NAS mounted? mount points differ per machine (host vs container)",
+        }))
         return 1
     result = sample_library(root, args.max_artists, seed=args.seed)
     if args.out:

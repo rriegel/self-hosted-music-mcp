@@ -45,6 +45,21 @@ commands below use the same prefix.
 
 Requires Python 3.13+ (uv provides it).
 
+## Configuration
+
+Machine-specific paths come from environment variables — mount points differ between
+the NAS host and containers/other boxes. Put these in your shell profile or an
+uncommitted `.env` file:
+
+| Variable | Used by | Example |
+|---|---|---|
+| `MUSIC_LIBRARY_ROOT` | `library_sample` | `/mnt/terra-6tb-1/media/music` (NAS host) |
+| `MUSIC_WATCHLIST` | `join_e2e` | `/opt/data/scripts/music-release-radar/watchlist.json` |
+| `LB_TOKEN` | `lb_check` | ListenBrainz user token (optional; public data works without it) |
+
+Every value can also be passed as a CLI argument (`--help` shows which), which wins
+over the env var.
+
 ## Spike (Phase 0)
 
 Read-only programs that were run against the real library to validate the MBID join
