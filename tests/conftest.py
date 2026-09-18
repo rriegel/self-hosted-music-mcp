@@ -1,8 +1,14 @@
-"""Shared fixtures: tiny silent audio files with tag surgery via mutagen.
+"""Shared fixtures.
 
-MP3s get real ID3 frames (TPE1/TALB/TDRC + TXXX for MBIDs — Picard's layout);
-FLACs get Vorbis comments; M4As get © atoms + iTunes freeform atoms for MBIDs.
-Matches what the reader must handle in the wild.
+The unit-test library is CHECKED IN under tests/fixtures/library (tiny silent files,
+generated once with ffmpeg) so tests run anywhere without ffmpeg installed:
+- Tagged Artist: MP3 with ID3 TXXX MBIDs (Picard layout) + FLAC with Vorbis comments
+- M4A Artist: MP4 with (c) atoms + iTunes freeform MBID atom
+- Mystery Artist: MP3 with no tags
+- Broken Artist: garbage bytes with an .mp3 suffix
+
+make_audio() keeps mutagen tag surgery available for tmp_path-based tests (Phase 1+),
+but skips cleanly when ffmpeg is not installed — CI never needs it.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from mutagen.id3 import ID3, TALB, TPE1, TXXX
 from mutagen.mp4 import MP4
 
 FFMPEG = shutil.which("ffmpeg")
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "library"
 
 # fixture kwarg name -> (vorbis key, id3 frame factory)
 TAG_SPECS = {
@@ -36,27 +43,33 @@ MP4_TAG_SPECS = {
 }
 
 
-def _ffmpeg_silent(target: Path, with_m4a_mbids: bool = False) -> None:
-    assert FFMPEG, "ffmpeg required for fixture generation"
-    args = [FFMPEG, "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "0.05", "-y"]
-    if with_m4a_mbids:
-        # metadata writes freeform atoms usable as MP4 MBID fixtures
-        args += [
-            "-metadata", "artist=M4A Artist",
-            "-metadata", "musicbrainz_artistid=99999999-8888-7777-6666-555555555555",
-        ]
-    args.append(str(target))
-    subprocess.run(args, check=True, capture_output=True)
+@pytest.fixture(scope="session")
+def sample_library() -> Path:
+    """Read-only reference to the committed tiny library."""
+    assert FIXTURES_DIR.is_dir(), f"missing checked-in fixtures: {FIXTURES_DIR}"
+    return FIXTURES_DIR
 
 
 @pytest.fixture(scope="session")
 def make_audio():
-    """Factory: make_audio(dir, 'file.mp3', artist=..., artist_mbid=...)."""
+    """Factory for NEW silent audio files with tag surgery: make_audio(dir, 'x.mp3', artist=...).
+
+    Requires ffmpeg on PATH; tests using it are skipped when unavailable.
+    """
+
+    def _ffmpeg_silent(target: Path) -> None:
+        if FFMPEG is None:
+            pytest.skip("ffmpeg not installed — fixture generation unavailable")
+        subprocess.run(
+            [FFMPEG, "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "0.05", "-y", str(target)],
+            check=True,
+            capture_output=True,
+        )
 
     def _make(directory: Path, filename: str, **tags) -> Path:
         target = directory / filename
         target.parent.mkdir(parents=True, exist_ok=True)
-        _ffmpeg_silent(target, with_m4a_mbids=target.suffix == ".m4a")
+        _ffmpeg_silent(target)
         if target.suffix == ".mp3":
             id3 = ID3()
             for name, (_, make_frame) in TAG_SPECS.items():
@@ -83,23 +96,3 @@ def make_audio():
         return target
 
     return _make
-
-
-@pytest.fixture(scope="session")
-def sample_library(make_audio, tmp_path_factory: pytest.TempPathFactory):
-    """A tiny fake library: one MBID-tagged artist, one untagged artist, one unreadable file."""
-    root = tmp_path_factory.mktemp("library")
-    tagged = root / "Tagged Artist" / "Album (2020)"
-    make_audio(tagged, "01 - Song.mp3", artist="Tagged Artist", album="Album (2020)",
-               artist_mbid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-               album_mbid="11111111-2222-3333-4444-555555555555")
-    make_audio(tagged, "02 - Song.flac", artist="Tagged Artist", album="Album (2020)",
-               artist_mbid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-    untagged = root / "Mystery Artist" / "Unknown"
-    make_audio(untagged, "01 - Track.mp3")  # no tags at all
-    m4a_dir = root / "M4A Artist" / "Album"
-    make_audio(m4a_dir, "01 - Track.m4a", artist="M4A Artist",
-               artist_mbid="99999999-8888-7777-6666-555555555555")
-    (root / "Broken Artist").mkdir()
-    (root / "Broken Artist" / "bad.mp3").write_bytes(b"not audio at all")
-    return root
