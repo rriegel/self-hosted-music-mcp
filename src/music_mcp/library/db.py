@@ -60,6 +60,29 @@ CREATE TABLE IF NOT EXISTS tracks (
 );
 CREATE INDEX IF NOT EXISTS idx_tracks_parent ON tracks (parent_folder);
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist_mbid);
+
+-- ListenBrainz listens (append-only; incremental sync by timestamp, schema v2)
+CREATE TABLE IF NOT EXISTS listens (
+    ts INTEGER NOT NULL,                -- unix seconds of the listen
+    artist_name TEXT NOT NULL,          -- LB credit string; names are search inputs only
+    artist_mbid TEXT,                   -- LB-provided; usually NULL for Pano scrobbles
+    track_name TEXT NOT NULL,
+    track_mbid TEXT,
+    release_name TEXT,
+    release_mbid TEXT,
+    PRIMARY KEY (ts, track_name, artist_name)
+);
+CREATE INDEX IF NOT EXISTS idx_listens_artist_name ON listens (artist_name);
+CREATE INDEX IF NOT EXISTS idx_listens_ts ON listens (ts);
+
+-- Listen-time artist stats keyed by the LB credit string (the resolution key
+-- for name→MBID goes through a separate resolver; this stays raw LB truth)
+CREATE TABLE IF NOT EXISTS listened_artists (
+    artist_name TEXT PRIMARY KEY,       -- LB credit string, as scrobbled
+    listen_count INTEGER NOT NULL,
+    first_listen_ts INTEGER,
+    last_listen_ts INTEGER
+);
 """
 
 
@@ -71,16 +94,27 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    _ensure_schema_version(conn)
     return conn
+
+
+def _ensure_schema_version(conn: sqlite3.Connection) -> None:
+    """Record the current schema version (idempotent; no breaking migrations yet)."""
+    row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+    if row is None:
+        # Fresh DB (or v1 without the marker): marker goes in at current version.
+        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '2')")
+        conn.commit()
+    elif int(row["value"]) < 2:
+        # v1 → v2: new tables are CREATE IF NOT EXISTS; idempotent script covers it.
+        conn.execute("UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'")
+        conn.commit()
 
 
 def current_schema_version(conn: sqlite3.Connection) -> int:
     """Read the schema version, creating the marker row on first call."""
+    _ensure_schema_version(conn)
     row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
-    if row is None:
-        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '1')")
-        conn.commit()
-        return 1
     return int(row["value"])
 
 

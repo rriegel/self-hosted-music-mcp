@@ -42,7 +42,7 @@ def library_copy(tmp_path: Path, sample_library: Path) -> Path:
 def test_connect_enables_wal(cache: sqlite3.Connection):
     mode = cache.execute("PRAGMA journal_mode").fetchone()[0]
     assert mode == "wal"
-    assert db_mod.current_schema_version(cache) == 1
+    assert db_mod.current_schema_version(cache) == 2
 
 
 def test_scan_indexes_fixture_library(cache: sqlite3.Connection, sample_library: Path):
