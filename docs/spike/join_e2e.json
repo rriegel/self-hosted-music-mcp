@@ -1,0 +1,230 @@
+{
+ "owned_artists_with_mbid": 42,
+ "owned_artists_in_watchlist": 38,
+ "join_rate_pct": 90.5,
+ "untagged_artists_in_sample": 21,
+ "untagged_matched_by_name": 7,
+ "mb_resolution_attempts": 4,
+ "mb_resolution_hits": 2,
+ "sample_joined": [
+  {
+   "artist_mbid": "8b22acd6-20e6-4463-a75c-c14b5cfdb666",
+   "tagged_names": [
+    "Earl Sweatshirt & Surf Gang",
+    "Earl Sweatshirt, Lerado Khalil & Surf Gang"
+   ],
+   "files": 17,
+   "in_watchlist": true,
+   "listen_count": 383,
+   "watchlist_name": "Earl Sweatshirt"
+  },
+  {
+   "artist_mbid": "da943be1-5611-4bf9-ac4c-0eef1bc0c16b",
+   "tagged_names": [
+    "MIKE & Surf Gang",
+    "MIKE, Earl Sweatshirt & Surf Gang",
+    "MIKE, Na\u2010Kel Smith & Surf Gang",
+    "MIKE, Niontay & Surf Gang",
+    "MIKE, Surf Gang & Anysia Kym",
+    "MIKE, Surf Gang & Jadasea"
+   ],
+   "files": 16,
+   "in_watchlist": true,
+   "listen_count": 342,
+   "watchlist_name": "MIKE"
+  },
+  {
+   "artist_mbid": "73ee98fc-7e8c-465d-b42c-8772ebc53de8",
+   "tagged_names": [
+    "Sister Nancy"
+   ],
+   "files": 10,
+   "in_watchlist": true,
+   "listen_count": 53,
+   "watchlist_name": "Sister Nancy"
+  },
+  {
+   "artist_mbid": "1ba1d493-7114-45e2-b163-a36d49a0c065",
+   "tagged_names": [
+    "Chet Baker"
+   ],
+   "files": 33,
+   "in_watchlist": true,
+   "listen_count": 31,
+   "watchlist_name": "Chet Baker"
+  },
+  {
+   "artist_mbid": "97b20fe3-0924-4a5f-9955-d0b5c5f9587f",
+   "tagged_names": [
+    "Santigold",
+    "Santigold feat. BC",
+    "Santigold feat. Karen O",
+    "Santigold feat. Mason Lee",
+    "Santigold feat. Spank Rock",
+    "Santigold feat. Trouble Andrew",
+    "Santigold feat. iLoveMakonnen",
+    "Santigold vs. Switch and FreQ Nasty"
+   ],
+   "files": 45,
+   "in_watchlist": true,
+   "listen_count": 30,
+   "watchlist_name": "Santigold"
+  },
+  {
+   "artist_mbid": "852e414c-d483-4e25-9c42-0f470869aae8",
+   "tagged_names": [
+    "dj blackpower"
+   ],
+   "files": 10,
+   "in_watchlist": true,
+   "listen_count": 26,
+   "watchlist_name": "dj blackpower"
+  },
+  {
+   "artist_mbid": "7441014f-f8f5-494f-81db-ff166fbc078d",
+   "tagged_names": [
+    "PinkPantheress",
+    "PinkPantheress & Ice Spice",
+    "PinkPantheress feat. Kelela",
+    "PinkPantheress feat. Rema",
+    "PinkPantheress with Anitta",
+    "PinkPantheress with Bladee",
+    "PinkPantheress with JADE",
+    "PinkPantheress with JT",
+    "PinkPantheress with Kylie Minogue",
+    "PinkPantheress with Oklou",
+    "PinkPantheress with Rachel Chinouriri",
+    "PinkPantheress with Ravyn Lenae",
+    "PinkPantheress with SEVENTEEN",
+    "PinkPantheress with Sugababes",
+    "PinkPantheress with Yves",
+    "PinkPantheress with Zara Larsson"
+   ],
+   "files": 55,
+   "in_watchlist": true,
+   "listen_count": 23,
+   "watchlist_name": "PinkPantheress"
+  },
+  {
+   "artist_mbid": "f858fe79-9e1b-48af-ba97-4c07e94e37cd",
+   "tagged_names": [
+    "Milky"
+   ],
+   "files": 13,
+   "in_watchlist": true,
+   "listen_count": 18,
+   "watchlist_name": "Milky"
+  },
+  {
+   "artist_mbid": "7f2aa196-cfd4-4a3d-ace3-28b7b6a79af7",
+   "tagged_names": [
+    "SBTRKT",
+    "SBTRKT feat. Anna of the North",
+    "SBTRKT feat. D Double E",
+    "SBTRKT feat. Kai\u2010Isaiah Jamal",
+    "SBTRKT feat. LEILAH",
+    "SBTRKT feat. LEILAH & Sampha",
+    "SBTRKT feat. Little Dragon",
+    "SBTRKT feat. Sampha",
+    "SBTRKT feat. Sampha & George Riley",
+    "SBTRKT feat. Saya Gray",
+    "SBTRKT feat. Teezo Touchdown",
+    "SBTRKT feat. Toro y Moi"
+   ],
+   "files": 34,
+   "in_watchlist": true,
+   "listen_count": 15,
+   "watchlist_name": "SBTRKT"
+  },
+  {
+   "artist_mbid": "ffa12b9b-3842-443c-8da2-3e06dace2970",
+   "tagged_names": [
+    "Maxo Kream",
+    "Maxo Kream & Isaiah Falls",
+    "Maxo Kream feat. A$AP Rocky",
+    "Maxo Kream feat. Anderson .Paak",
+    "Maxo Kream feat. Babyface Ray",
+    "Maxo Kream feat. Benny the Butcher",
+    "Maxo Kream feat. Don Toliver",
+    "Maxo Kream feat. FERG",
+    "Maxo Kream feat. Freddie Gibbs",
+    "Maxo Kream feat. KCG Josh",
+    "Maxo Kream feat. Megan Thee Stallion",
+    "Maxo Kream feat. Monaleo",
+    "Maxo Kream feat. Peso Peso & KCG Josh",
+    "Maxo Kream feat. ScHoolboy Q",
+    "Maxo Kream feat. Travis Scott",
+    "Maxo Kream feat. Tyler, The Creator",
+    "Maxo Kream, Cartel Bo, KCG Josh & LoLife Blacc",
+    "Maxo Kream, Denzel Curry & JPEGMAFIA"
+   ],
+   "files": 47,
+   "in_watchlist": true,
+   "listen_count": 13,
+   "watchlist_name": "Maxo Kream"
+  }
+ ],
+ "sample_name_matches": [
+  {
+   "tagged_name": "Ama",
+   "files": 15,
+   "listen_count": 0
+  },
+  {
+   "tagged_name": "Aphex Twin",
+   "files": 2,
+   "listen_count": 0
+  },
+  {
+   "tagged_name": "Bearface",
+   "files": 1,
+   "listen_count": 0
+  },
+  {
+   "tagged_name": "Peter Frampton",
+   "files": 3,
+   "listen_count": 0
+  },
+  {
+   "tagged_name": "PinkPantheress",
+   "files": 1,
+   "listen_count": 23
+  },
+  {
+   "tagged_name": "SBTRKT",
+   "files": 1,
+   "listen_count": 15
+  },
+  {
+   "tagged_name": "The Weeknd",
+   "files": 4,
+   "listen_count": 0
+  }
+ ],
+ "sample_mb_resolutions": [
+  {
+   "query": "Ama",
+   "candidate": {
+    "mbid": "a5ea16ca-81e3-4c2e-8377-277269a428cd",
+    "name": "Ama",
+    "score": 100
+   }
+  },
+  {
+   "query": "Aphex Twin",
+   "error": "URL can't contain control characters. '/ws/2/artist?query=Aphex Twin&fmt=json&limit=3' (found at least ' ')"
+  },
+  {
+   "query": "Bearface",
+   "candidate": {
+    "mbid": "53e8c934-cde9-45c1-b240-0f382088408f",
+    "name": "bearface.",
+    "score": 100
+   }
+  },
+  {
+   "query": "David Wise",
+   "error": "URL can't contain control characters. '/ws/2/artist?query=David Wise&fmt=json&limit=3' (found at least ' ')"
+  }
+ ]
+}

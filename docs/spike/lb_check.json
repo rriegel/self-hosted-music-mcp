@@ -1,0 +1,73 @@
+{
+ "user": "rriegel",
+ "checked_at": "2026-09-18T04:26:22.529235+00:00",
+ "public_listens": {
+  "status": 200,
+  "count": 100,
+  "newest_ts": 1789682390,
+  "with_mbids": 0,
+  "sample": [
+   {
+    "track": "Skurrr",
+    "artist": "MIKE, Tony Seltzer",
+    "mbids": []
+   },
+   {
+    "track": "Skurrr",
+    "artist": "MIKE, Tony Seltzer",
+    "mbids": []
+   },
+   {
+    "track": "u know my body",
+    "artist": "Armand Hammer, The Alchemist",
+    "mbids": []
+   },
+   {
+    "track": "u know my body",
+    "artist": "Armand Hammer, The Alchemist",
+    "mbids": []
+   },
+   {
+    "track": "Landlines",
+    "artist": "Armand Hammer",
+    "mbids": []
+   }
+  ]
+ },
+ "top_artists": {
+  "status": 200,
+  "count": 20,
+  "with_mbid": 0,
+  "sample": [
+   {
+    "name": "Surf Gang",
+    "mbid": null,
+    "listens": 629
+   },
+   {
+    "name": "Earl Sweatshirt",
+    "mbid": null,
+    "listens": 383
+   },
+   {
+    "name": "MIKE",
+    "mbid": null,
+    "listens": 342
+   },
+   {
+    "name": "Kelela",
+    "mbid": null,
+    "listens": 172
+   },
+   {
+    "name": "Budgie",
+    "mbid": null,
+    "listens": 166
+   }
+  ]
+ },
+ "similar_artists": {
+  "status": "skipped: no seed mbid"
+ },
+ "token_validate": "no LB_TOKEN env var \u2014 skipped"
+}

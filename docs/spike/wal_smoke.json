@@ -1,0 +1,39 @@
+{
+ "db": "/tmp/tmprk7u8dfj/spike_wal.db",
+ "journal_mode": "wal",
+ "integrity": "ok",
+ "threads": [
+  {
+   "role": "writer",
+   "rows": 5000,
+   "elapsed_s": 0.01
+  },
+  {
+   "role": "reader",
+   "reads": 10,
+   "count_progression": [
+    0,
+    5000
+   ],
+   "elapsed_s": 0.504
+  },
+  {
+   "role": "reader",
+   "reads": 10,
+   "count_progression": [
+    0,
+    5000
+   ],
+   "elapsed_s": 0.512
+  },
+  {
+   "role": "reader",
+   "reads": 10,
+   "count_progression": [
+    0,
+    5000
+   ],
+   "elapsed_s": 0.504
+  }
+ ]
+}

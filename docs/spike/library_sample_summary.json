@@ -1,0 +1,23 @@
+{
+ "root": "/beelink/mnt/terra-6tb-1/media/music",
+ "artist_dirs_in_root": 540,
+ "artist_dirs_sampled": 40,
+ "files_seen": 1273,
+ "files_readable": 1273,
+ "unreadable_dirs": [],
+ "coverage_pct": {
+  "artist_mbid": 92.5,
+  "album_mbid": 92.5,
+  "recording_mbid": 0.9,
+  "release_track_mbid": 92.5
+ },
+ "basic_tag_pct": {
+  "artist": 100.0,
+  "album": 100.0,
+  "date": 100.0
+ },
+ "formats": {
+  "MP3": 1261,
+  "MP4": 12
+ }
+}
