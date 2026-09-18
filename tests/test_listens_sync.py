@@ -96,6 +96,27 @@ def test_gap_analysis_separates_owned_and_unowned(cache: sqlite3.Connection):
     assert "Owned Band" not in names
 
 
+def test_gap_splits_collab_credits(cache: sqlite3.Connection):
+    """Regression (real-data): 'Earl Sweatshirt, SURF GANG' must not fake a gap
+    when both parts are owned — split + case-insensitive matching."""
+    _seed_library(cache, {"Earl Sweatshirt": "mbid-earl", "Surf Gang": "mbid-surf"})
+    listens = [_listen(NOW - i, "Earl Sweatshirt, SURF GANG", f"c{i}") for i in range(7)]
+    listens += [_listen(NOW - i, "Ghost Artist", f"g{i}") for i in range(9)]
+    sync_listens(cache, FakeClient(listens))
+    refresh_listened_artists(cache)
+
+    gap = reports.listens_gap_analysis(cache, min_listens=5)
+    names = {g["artist"] for g in gap["not_owned"]}
+    assert "Earl Sweatshirt, SURF GANG" not in names  # both parts owned → not a gap
+    assert "Ghost Artist" in names
+    assert gap["matched_owned"] == 1
+
+    # single owned part in a collab also counts as owned
+    cache.execute("INSERT INTO listened_artists VALUES ('Earl Sweatshirt feat. Nobody', 5, 0, 0)")
+    gap2 = reports.listens_gap_analysis(cache, min_listens=5)
+    assert "Earl Sweatshirt feat. Nobody" not in {g["artist"] for g in gap2["not_owned"]}
+
+
 def test_stale_library_uses_past_intensity(cache: sqlite3.Connection):
     _seed_library(cache, {"Stale Band": "mbid-1", "Active Band": "mbid-2"})
     # Stale Band: high past intensity, but all listens > 6 months old

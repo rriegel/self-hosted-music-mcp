@@ -11,6 +11,8 @@ from __future__ import annotations
 import sqlite3
 import time
 
+from music_mcp.listens.credits import owned_name_index, resolve_lb_credit
+
 
 def listens_recent(conn: sqlite3.Connection, limit: int = 20) -> dict:
     rows = conn.execute(
@@ -51,39 +53,50 @@ def listens_top_artists(conn: sqlite3.Connection, limit: int = 20) -> dict:
     }
 
 
-def listens_gap_analysis(conn: sqlite3.Connection, min_listens: int = 5) -> dict:
+def listens_gap_analysis(conn: sqlite3.Connection, min_listens: int = 5, limit: int = 100) -> dict:
     """Artists I listen to but don't own (the shopping list).
 
-    Join: listened_artists (LB credit string) → library tracks (canonical names +
-    artist MBIDs). Matched by exact name; LB names that don't match any owned
-    artist are candidates — but truly-unowned and credit-mismatch both land here,
-    so the result reports both counts honestly.
+    Join: listened_artists (LB credit string) → library owned names, with credit-
+    string splitting ('Earl Sweatshirt, SURF GANG' → parts) and case-insensitive
+    matching. An LB credit counts as owned if the whole string or ANY split part
+    matches an owned name — so scrobbles from owned collaborations don't fake a gap.
+
+    Remaining entries are honest candidates: truly-unowned artists, artists owned
+    but untagged (folder names don't match LB credits), credit strings with no
+    owned part, and non-music scrobbles (podcasts). Phase 3's name→MBID resolver
+    is what separates 'unowned' from 'owned but unresolved'.
     """
+    owned = owned_name_index(conn)
     total = conn.execute("SELECT COUNT(*) FROM listened_artists").fetchone()[0]
-    rows = conn.execute(
-        """
-        SELECT la.artist_name, la.listen_count, la.last_listen_ts
-        FROM listened_artists la
-        WHERE la.listen_count >= ?
-          AND la.artist_name NOT IN (
-              SELECT t.artist FROM tracks t WHERE t.artist IS NOT NULL
-          )
-          AND la.artist_name NOT IN (
-              SELECT a.name FROM artists a WHERE a.name IS NOT NULL
-          )
-        ORDER BY la.listen_count DESC
-        LIMIT 100
-        """,
-        (min_listens,),
-    ).fetchall()
+
+    not_owned: list[dict] = []
+    owned_count = 0
+    for row in conn.execute(
+        "SELECT artist_name, listen_count, last_listen_ts FROM listened_artists ORDER BY listen_count DESC"
+    ):
+        verdict = resolve_lb_credit(row["artist_name"], owned)
+        if verdict["owned"] or row["listen_count"] < min_listens:
+            owned_count += 1 if verdict["owned"] else 0
+            continue
+        not_owned.append(
+            {
+                "artist": row["artist_name"],
+                "listens": row["listen_count"],
+                "last_listen_ts": row["last_listen_ts"],
+            }
+        )
+        if len(not_owned) >= limit:
+            break
+
     return {
-        "criterion": f"listens >= {min_listens} and not in library (exact name match)",
+        "criterion": (
+            f"listens >= {min_listens} and no split-part matches an owned artist name "
+            "(case-insensitive; Phase 3 resolver will separate unowned from unresolved)"
+        ),
         "listened_artists_total": total,
-        "not_owned": [
-            {"artist": r["artist_name"], "listens": r["listen_count"], "last_listen_ts": r["last_listen_ts"]}
-            for r in rows
-        ],
-        "count": len(rows),
+        "matched_owned": owned_count,
+        "not_owned": not_owned,
+        "count": len(not_owned),
     }
 
 
