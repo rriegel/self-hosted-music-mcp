@@ -51,11 +51,13 @@ Read-only programs that were run against the real library to validate the MBID j
 (results and verdict: `docs/spike/findings.md`). Re-run any of them from the repo root:
 
 ```sh
-uv run python -m music_mcp.spike.library_sample [--max-artists 40]   # MBID coverage sample
-uv run python -m music_mcp.spike.lb_check                            # ListenBrainz endpoints
-uv run python -m music_mcp.spike.mb_check [ARTIST_MBID]              # rate-limited MB client
-uv run python -m music_mcp.spike.join_e2e                            # watchlist x library join
-uv run python -m music_mcp.spike.wal_smoke                           # SQLite WAL concurrency
+uv run python -m music_mcp.spike.library_sample          # MBID coverage sample (40 artists default)
+uv run python -m music_mcp.spike.library_sample --max-artists 100   # larger sample
+uv run python -m music_mcp.spike.lb_check                # ListenBrainz endpoints
+uv run python -m music_mcp.spike.mb_check                # rate-limited MB client (default artist)
+uv run python -m music_mcp.spike.mb_check 83d91898-7763-47d2-b9cb-065c48cd3809   # specific artist
+uv run python -m music_mcp.spike.join_e2e                # watchlist x library join
+uv run python -m music_mcp.spike.wal_smoke               # SQLite WAL concurrency
 ```
 
 These touch the local music library and live APIs by design — keep them off CI (they
