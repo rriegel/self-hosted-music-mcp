@@ -83,6 +83,27 @@ mount); a second `scan` right after should report `added: 0` with most files
 `unchanged` and finish in seconds. `status` shows the MBID coverage the resolver
 work in Phase 3 will improve.
 
+## Listens layer (Phase 2)
+
+ListenBrainz listens synced into the same cache (incremental by timestamp; token
+optional for public profiles). Joins listen history against the library:
+
+```sh
+export LB_USER="your-lb-username"                 # optional: LB_TOKEN (private profiles)
+
+uv run python -m music_mcp.listens sync           # incremental sync (--pages N bounds it)
+uv run python -m music_mcp.listens recent         # newest listens
+uv run python -m music_mcp.listens top            # top artists by listen count
+uv run python -m music_mcp.listens gap            # listened but not owned (shopping list)
+uv run python -m music_mcp.listens stale          # owned but dormant (rediscovery list)
+uv run python -m music_mcp.listens discoveries    # artists first listened in the window
+```
+
+Report windows: `--min-listens` (gap threshold), `--months` (stale window),
+`--days` (discovery window). Note: LB artist names are credit strings ("A, B",
+"A feat. C"); `gap`/`stale` match them against library names exactly, so collab
+credits may appear unowned until Phase 3's name→MBID resolver lands.
+
 ## Spike (Phase 0)
 
 Read-only programs that were run against the real library to validate the MBID join
