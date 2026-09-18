@@ -83,6 +83,25 @@ CREATE TABLE IF NOT EXISTS listened_artists (
     first_listen_ts INTEGER,
     last_listen_ts INTEGER
 );
+
+-- MusicBrainz response cache (schema v3): MB metadata is effectively immutable
+CREATE TABLE IF NOT EXISTS mb_cache (
+    key TEXT PRIMARY KEY,               -- sha256 of full request URL
+    url TEXT NOT NULL,
+    response TEXT NOT NULL,             -- raw JSON payload
+    fetched_at REAL NOT NULL
+);
+
+-- Resolver proposals (folder/display artist name -> proposed MBID)
+CREATE TABLE IF NOT EXISTS mb_resolutions (
+    folder_artist TEXT PRIMARY KEY,
+    proposed_mbid TEXT,
+    proposed_name TEXT,
+    score INTEGER,
+    confidence TEXT,                    -- 'exact' | 'case-insensitive' | 'fuzzy' | 'none'
+    status TEXT NOT NULL DEFAULT 'proposed',   -- proposed | applied | rejected | ambiguous
+    proposed_at REAL NOT NULL
+);
 """
 
 
@@ -99,15 +118,14 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
 
 
 def _ensure_schema_version(conn: sqlite3.Connection) -> None:
-    """Record the current schema version (idempotent; no breaking migrations yet)."""
+    """Record the current schema version (idempotent upgrades, additive only)."""
     row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
     if row is None:
-        # Fresh DB (or v1 without the marker): marker goes in at current version.
-        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '2')")
+        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '3')")
         conn.commit()
-    elif int(row["value"]) < 2:
-        # v1 → v2: new tables are CREATE IF NOT EXISTS; idempotent script covers it.
-        conn.execute("UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'")
+    elif int(row["value"]) < 3:
+        # additive upgrades (v2 listens tables, v3 mb tables) are CREATE IF NOT EXISTS
+        conn.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'")
         conn.commit()
 
 

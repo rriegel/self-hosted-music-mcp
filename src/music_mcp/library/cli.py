@@ -12,7 +12,7 @@ import os
 import sys
 from pathlib import Path
 
-from music_mcp.library import db, reports, scanner
+from music_mcp.library import db, quality, reports, scanner
 
 DEFAULT_DB = "library-index.db"
 
@@ -42,13 +42,14 @@ _GLOBAL_FLAGS = {"--db", "--root", "--full", "--filter-mbid"}
 def _split_global_flags(argv: list[str]) -> tuple[dict[str, list[str]], list[str]]:
     """Pull global flags out of argv wherever they appear (before or after the
     subcommand). Argparse only recognizes them pre-subcommand, but users write
-    them after — both should work."""
+    them after — both should work. A value flag at the end of argv (no value
+    following) is left in place so argparse reports the missing argument."""
     pulled: dict[str, list[str]] = {}
     rest: list[str] = []
     i = 0
     while i < len(argv):
         token = argv[i]
-        if token in _GLOBAL_FLAGS:
+        if token in _GLOBAL_FLAGS and i + 1 < len(argv):
             pulled.setdefault(token, []).append(argv[i + 1])
             i += 2
         elif token == "--full":
@@ -69,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=None, help="library root (default: $MUSIC_LIBRARY_ROOT)")
     parser.add_argument("--full", action="store_true", help="scan: ignore mtimes; re-read every file")
     parser.add_argument("--filter-mbid", default=None, help="artists: 'missing' or a specific artist_mbid")
+    parser.add_argument("--scope", default="all", choices=["all", "release_group", "title", "folder"],
+                        help="dupes: which dupe signals to report")
+    parser.add_argument("--min-bitrate", type=int, default=192000, help="quality: low-bitrate threshold")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("scan", help="incremental scan of the library into the cache")
@@ -76,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("artists", help="indexed artists")
     albums = sub.add_parser("albums", help="albums for one artist (mbid or name)")
     albums.add_argument("artist")
+    sub.add_parser("dupes", help="duplicate releases / mislabeled folders")
+    sub.add_parser("quality", help="tag-quality + bitrate report")
 
     # Reinstate pulled flags at the front so the main parser sees them.
     reinstated: list[str] = []
@@ -97,6 +103,10 @@ def main(argv: list[str] | None = None) -> int:
             result = reports.library_artists(conn, filter_mbid=args.filter_mbid)
         elif args.command == "albums":
             result = reports.library_albums(conn, args.artist)
+        elif args.command == "dupes":
+            result = quality.library_find_dupes(conn, scope=args.scope)
+        elif args.command == "quality":
+            result = quality.library_quality_report(conn, min_bitrate=args.min_bitrate)
         else:  # pragma: no cover - argparse enforces choices
             parser.error(f"unknown command: {args.command}")
     finally:
