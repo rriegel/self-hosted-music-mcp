@@ -88,8 +88,29 @@ class MBClient:
         return self.get(f"/artist/{quote(artist_mbid)}", params)
 
     def search_artist(self, name: str, limit: int = 5) -> dict:
-        """Artist search; best candidate first (MB ranks by score)."""
-        return self.get("/artist", {"query": f'artist:"{name}"', "limit": limit})
+        """Artist search: exact field query first, then a plain query.
+
+        The artist:"name" field query matches MB's stored name only — renamed
+        artists (e.g. Mos Def → Yasiin Bey) come back empty even though MB has
+        the old name as an alias. The plain query searches aliases too, so we
+        run it as fallback and merge candidates (deduped by id, keeping the
+        higher score).
+        """
+        field_data = self._search_raw(f'artist:"{name}"', limit)
+        by_id: dict[str, dict] = {}
+        for a in field_data.get("artists", []):
+            by_id[a["id"]] = a
+        if len(by_id) < limit:
+            plain_data = self._search_raw(name, limit)
+            for a in plain_data.get("artists", []):
+                current = by_id.get(a["id"])
+                if current is None or int(a.get("score") or 0) > int(current.get("score") or 0):
+                    by_id[a["id"]] = a
+        merged = sorted(by_id.values(), key=lambda a: -int(a.get("score") or 0))
+        return {"artists": merged[:limit]}
+
+    def _search_raw(self, query: str, limit: int) -> dict:
+        return self.get("/artist", {"query": query, "limit": limit})
 
     def release_groups(self, artist_mbid: str, limit: int = 100) -> list[dict]:
         data = self.get(

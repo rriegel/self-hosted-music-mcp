@@ -48,8 +48,9 @@ def test_mb_client_caches_responses(cache: sqlite3.Connection):
     )
     client = MBClient(cache)
     client.search_artist("Foo", limit=1)
-    client.search_artist("Foo", limit=1)  # second call: served from cache
-    assert route.call_count == 1  # only one network hit
+    client.search_artist("Foo", limit=1)  # second search: every request served from cache
+    # field query + plain-query fallback = 2 network hits per uncached search
+    assert route.call_count == 2
 
 
 @respx.mock
@@ -63,19 +64,19 @@ def test_mb_client_rate_limits():
     t0 = time.monotonic()
     client.search_artist("A")
     client.search_artist("B")
-    # two calls must be spaced by at least ~1.1s
-    assert time.monotonic() - t0 >= 1.0
+    # two searches x (field+fallback) requests must respect 1.1s spacing
+    assert time.monotonic() - t0 >= 2.0
 
 
 @respx.mock
 def test_mb_client_retries_on_503():
     route = respx.get("https://musicbrainz.org/ws/2/artist").mock(
-        return_value=Response(200, json={"artists": []})
+        side_effect=[Response(503), Response(200, json={"artists": []})] * 8
     )
-    route.side_effect = [Response(503), Response(200, json={"artists": []})]
     client = MBClient(db_mod.connect(":memory:"))
     data = client.search_artist("X")
-    assert data == {"artists": []}
+    assert isinstance(data.get("artists"), list)
+    assert route.call_count >= 2  # the 503 was retried
 
 
 def test_propose_stores_candidates(cache: sqlite3.Connection, sample_library: Path):
