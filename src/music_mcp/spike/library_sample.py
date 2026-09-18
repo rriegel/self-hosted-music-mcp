@@ -176,7 +176,7 @@ def main() -> int:
     if not root_specified:
         print(json.dumps({
             "error": "no library root given",
-            "hint": 'pass it as an argument, or: export MUSIC_LIBRARY_ROOT="/mnt/terra-6tb-1/media/music"',
+            "hint": "pass it as an argument, or: export MUSIC_LIBRARY_ROOT=\"/path/to/music\"",
         }))
         return 1
     root = Path(root_specified)

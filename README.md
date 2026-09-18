@@ -53,8 +53,9 @@ uncommitted `.env` file:
 
 | Variable | Used by | Example |
 |---|---|---|
-| `MUSIC_LIBRARY_ROOT` | `library_sample` | `/mnt/terra-6tb-1/media/music` (NAS host) |
-| `MUSIC_WATCHLIST` | `join_e2e` | `/opt/data/scripts/music-release-radar/watchlist.json` |
+| `MUSIC_LIBRARY_ROOT` | `library_sample` | `/path/to/music` |
+| `MUSIC_WATCHLIST` | `join_e2e` | `/path/to/watchlist.json` |
+| `LB_USER` | `lb_check` | ListenBrainz username |
 | `LB_TOKEN` | `lb_check` | ListenBrainz user token (optional; public data works without it) |
 
 Every value can also be passed as a CLI argument (`--help` shows which), which wins

@@ -15,7 +15,7 @@ import time
 from urllib.request import Request, urlopen
 
 MB_BASE = "https://musicbrainz.org/ws/2"
-UA = "self-hosted-music-mcp-spike/0.0.1 (https://github.com/rriegel; hermes@riegelmedia.com)"
+UA = "self-hosted-music-mcp-spike/0.0.1 (https://github.com/rriegel/self-hosted-music-mcp)"
 RATE_SECONDS = 1.1
 _last_request_ts = 0.0
 

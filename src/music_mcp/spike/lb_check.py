@@ -3,8 +3,8 @@
 Public endpoints work unauthenticated for public data; the auth token is only
 needed for private data. This probe tries public first and reports what works.
 
-Usage: uv run python -m music_mcp.spike.lb_check [--user rriegel]
-Writes findings JSON to stdout (plus a machine-readable file via --out).
+Usage: uv run python -m music_mcp.spike.lb_check            (user from $LB_USER)
+       uv run python -m music_mcp.spike.lb_check --user NAME
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from urllib.request import Request, urlopen
 
 LB_BASE = "https://api.listenbrainz.org/1"
-UA = "self-hosted-music-mcp-spike/0.0.1 (https://github.com/rriegel; hermes@riegelmedia.com)"
+UA = "self-hosted-music-mcp-spike/0.0.1 (https://github.com/rriegel/self-hosted-music-mcp)"
 
 
 def lb_get(path: str, token: str | None = None) -> dict | int:
@@ -40,9 +40,16 @@ def summarize(payload: dict) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--user", default="rriegel")
+    parser.add_argument("--user", default=os.environ.get("LB_USER"), help="default: $LB_USER")
     parser.add_argument("--out", default=None, help="also write JSON to this path")
     args = parser.parse_args()
+
+    if not args.user:
+        print(json.dumps({
+            "error": "no ListenBrainz username given",
+            "hint": 'pass --user NAME, or: export LB_USER="your-lb-username"',
+        }))
+        return 1
 
     token = os.environ.get("LB_TOKEN")
 

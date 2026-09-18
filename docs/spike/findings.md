@@ -1,6 +1,6 @@
 # Phase 0 Spike — Findings
 
-**Date:** 2026-09-17/18 · **Run on:** rriegel-box (Beelink), real data, read-only
+**Date:** 2026-09-17/18 · **Run on:** the Beelink host with the library mounted (read-only)
 **All commands:** `uv run python -m music_mcp.spike.<module>` — outputs in `docs/spike/`
 
 ## Verdict: GO

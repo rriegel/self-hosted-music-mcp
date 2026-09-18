@@ -81,7 +81,7 @@ def main() -> int:
     if not args.watchlist:
         print(json.dumps({
             "error": "no watchlist path given",
-            "hint": 'export MUSIC_WATCHLIST="/opt/data/scripts/music-release-radar/watchlist.json"',
+            "hint": "export MUSIC_WATCHLIST=\"/path/to/watchlist.json\"",
         }))
         return 1
 
