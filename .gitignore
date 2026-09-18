@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock
+
+# Secrets — never commit tokens
+.env
+*.token
+
+# OS
+.DS_Store
