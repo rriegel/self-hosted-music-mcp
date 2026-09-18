@@ -24,7 +24,7 @@ def writer(db_path: Path, rows: int) -> dict:
     with conn:
         conn.executemany(
             "INSERT INTO listens (ts, artist_mbid, track) VALUES (?, ?, ?)",
-            [(i, "mbid-%d" % i, "track-%d" % i) for i in range(rows)],
+            [(i, f"mbid-{i}", f"track-{i}") for i in range(rows)],
         )
     conn.close()
     return {"role": "writer", "rows": rows, "elapsed_s": round(time.monotonic() - started, 3)}

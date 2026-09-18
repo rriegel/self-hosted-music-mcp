@@ -25,9 +25,9 @@ def test_read_tags_survives_garbage_file(sample_library: Path):
 def test_sample_library_counts_and_coverage(sample_library: Path):
     result = ls.sample_library(sample_library, max_artists=10)
     summary = result["summary"]
-    assert summary["files_seen"] == 3
-    assert summary["files_readable"] == 2
-    assert summary["coverage_pct"]["artist_mbid"] == 50.0  # 1 of 2 readable files tagged
+    assert summary["files_seen"] == 4  # 3 valid + 1 garbage .mp3 (seen, then unreadable)
+    assert summary["files_readable"] == 3
+    assert summary["coverage_pct"]["artist_mbid"] == 66.7  # 2 of 3 readable files tagged
     assert summary["unreadable_dirs"] == []  # garbage file is per-file, not per-dir
 
 

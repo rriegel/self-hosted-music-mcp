@@ -22,12 +22,14 @@ from mutagen import File as mutagen_file
 
 AUDIO_SUFFIXES = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wma", ".wav"}
 
-# Vorbis comments (FLAC/Ogg) and ID3 (MP3) carry the same MBIDs under different keys.
+# Each field: candidate tag keys across tag systems. Vorbis comments (FLAC/Ogg) use
+# lowercase names; ID3 (MP3) uses frame IDs, with MBIDs in TXXX frames keyed by
+# description (Picard's convention). easy=True would HIDE TXXX frames, so we read raw.
 MBID_TAGS = {
-    "artist_mbid": ("musicbrainz_artistid", "MusicBrainz Artist Id"),
-    "album_mbid": ("musicbrainz_albumid", "MusicBrainz Album Id"),
-    "recording_mbid": ("musicbrainz_trackid", "MusicBrainz Track Id"),
-    "release_track_mbid": ("musicbrainz_releasetrackid", "MusicBrainz Release Track Id"),
+    "artist_mbid": ("musicbrainz_artistid", "TXXX:MusicBrainz Artist Id"),
+    "album_mbid": ("musicbrainz_albumid", "TXXX:MusicBrainz Album Id"),
+    "recording_mbid": ("musicbrainz_trackid", "TXXX:MusicBrainz Track Id"),
+    "release_track_mbid": ("musicbrainz_releasetrackid", "TXXX:MusicBrainz Release Track Id"),
 }
 BASIC_TAGS = {
     "artist": ("artist", "TPE1"),
@@ -36,21 +38,33 @@ BASIC_TAGS = {
 }
 
 
-def _tag(frame: object, keys: tuple[str, ...]) -> str | None:
-    for key in keys:
-        value = frame.get(key) if hasattr(frame, "get") else None
-        if value:
-            first = value[0] if isinstance(value, list) else value
-            if first:
-                return str(first)
+def _vorbis_get(tags: object, key: str) -> str | None:
+    """Vorbis-comment style lookup (FLAC/Ogg: dict-like, values are lists)."""
+    getter = getattr(tags, "get", None)
+    value = getter(key) if getter else None
+    if value:
+        first = value[0] if isinstance(value, list) else value
+        if first:
+            return str(first)
     return None
+
+
+def _id3_get(tags: object, key: str) -> str | None:
+    """ID3 lookup: plain frames (TPE1) or TXXX frames addressed as 'TXXX:<desc>'."""
+    frame = getattr(tags, "get", lambda _k, default=None: default)(key)
+    if frame is None:
+        return None
+    text = getattr(frame, "text", None)
+    if text:
+        return str(text[0])
+    return str(frame)
 
 
 def read_tags(path: Path) -> dict:
     """Read the tags we care about from one audio file. Never raises."""
     info: dict = {"path": str(path), "suffix": path.suffix.lower(), "readable": False}
     try:
-        audio = mutagen_file(path, easy=True)
+        audio = mutagen_file(path)
     except Exception as exc:  # noqa: BLE001 - spike: any read error is data
         info["error"] = f"{type(exc).__name__}: {exc}"
         return info
@@ -58,11 +72,13 @@ def read_tags(path: Path) -> dict:
         info["error"] = "unrecognized format"
         return info
     info["readable"] = True
-    tags = audio.tags or {}
-    for field, keys in MBID_TAGS.items():
-        info[field] = _tag(tags, keys)
-    for field, keys in BASIC_TAGS.items():
-        info[field] = _tag(tags, keys)
+    tags = audio.tags
+    if tags is None:
+        info["error"] = "no tags"
+        tags = {}
+    is_id3 = type(tags).__name__ == "ID3"  # mutagen.id3.ID3; vorbis tags are dict-like with list values
+    for field, (vorbis_key, id3_key) in {**MBID_TAGS, **BASIC_TAGS}.items():
+        info[field] = _id3_get(tags, id3_key) if is_id3 else _vorbis_get(tags, vorbis_key)
     info["bitrate"] = getattr(audio.info, "bitrate", None)
     info["format"] = type(audio).__name__
     return info

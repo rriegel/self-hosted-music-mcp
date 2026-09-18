@@ -13,7 +13,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.request import Request, urlopen
 
 LB_BASE = "https://api.listenbrainz.org/1"
@@ -46,7 +46,7 @@ def main() -> int:
 
     token = os.environ.get("LB_TOKEN")
 
-    findings: dict = {"user": args.user, "checked_at": datetime.now(timezone.utc).isoformat()}
+    findings: dict = {"user": args.user, "checked_at": datetime.now(UTC).isoformat()}
 
     # 1. Public listens (no auth) — how many MBIDs ride along?
     listens = lb_get(f"/user/{args.user}/listens?count=100")
