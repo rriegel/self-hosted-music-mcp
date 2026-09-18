@@ -17,10 +17,13 @@ jobs:
           # Personal machine paths, hostnames, and domains must never enter the repo.
           # Deliberate keeps: GitHub username (repo URLs), ListenBrainz username in
           # spike *output* files (LB profiles are public by design).
+          # The guard file itself is excluded: it necessarily contains the detection
+          # patterns it enforces.
           if grep -rInE '/beelink|/opt/data|/mnt/terra|rriegel-box|riegelmedia' \
               --include='*.py' --include='*.md' --include='*.json' \
               --include='*.toml' --include='*.yml' \
-              --exclude-dir=.venv . ; then
+              --exclude-dir=.venv \
+              --exclude='privacy-guard.yml' . ; then
             echo "::error::Personal paths/hostnames found in tracked files — see README Configuration section"
             exit 1
           fi
