@@ -74,7 +74,7 @@ def main() -> int:
     parser.add_argument("--library-sample", default=DEFAULT_SAMPLE)
     parser.add_argument("--watchlist", default=DEFAULT_WATCHLIST)
     parser.add_argument("--mb-resolve", type=int, default=3, help="how many untagged artists to resolve via MB")
-    parser.add_argument("--out", default="spike_join_e2e.json")
+    parser.add_argument("--out", default=None, help="also write JSON to this path")
     args = parser.parse_args()
 
     owned = load_owned_artists(Path(args.library_sample))
@@ -122,7 +122,8 @@ def main() -> int:
         "sample_mb_resolutions": mb_resolutions,
     }
     print(json.dumps(summary, indent=1))
-    Path(args.out).write_text(json.dumps(summary, indent=1))
+    if args.out:
+        Path(args.out).write_text(json.dumps(summary, indent=1))
     return 0
 
 

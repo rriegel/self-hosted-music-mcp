@@ -41,7 +41,7 @@ def summarize(payload: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", default="rriegel")
-    parser.add_argument("--out", default="spike_lb_check.json")
+    parser.add_argument("--out", default=None, help="also write JSON to this path")
     args = parser.parse_args()
 
     token = os.environ.get("LB_TOKEN")
@@ -110,8 +110,9 @@ def main() -> int:
         findings["token_validate"] = "no LB_TOKEN env var — skipped"
 
     print(json.dumps(findings, indent=1))
-    with open(args.out, "w") as fh:
-        json.dump(findings, fh, indent=1)
+    if args.out:
+        with open(args.out, "w") as fh:
+            json.dump(findings, fh, indent=1)
     return 0
 
 

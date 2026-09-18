@@ -166,7 +166,7 @@ def main() -> int:
     parser.add_argument("sample_dir", nargs="?", default="/beelink/mnt/terra-6tb-1/media/music")
     parser.add_argument("--max-artists", type=int, default=40)
     parser.add_argument("--seed", type=int, default=17)
-    parser.add_argument("--out", type=Path, default=Path("spike_library_sample.json"))
+    parser.add_argument("--out", type=Path, default=None, help="also write full JSON to this path")
     args = parser.parse_args()
 
     root = Path(args.sample_dir)
@@ -174,7 +174,8 @@ def main() -> int:
         print(json.dumps({"error": f"not a directory: {root}"}))
         return 1
     result = sample_library(root, args.max_artists, seed=args.seed)
-    args.out.write_text(json.dumps(result, indent=1))
+    if args.out:
+        args.out.write_text(json.dumps(result, indent=1))
     print(json.dumps(result["summary"], indent=1))
     return 0
 

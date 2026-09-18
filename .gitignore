@@ -16,3 +16,6 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# spike scripts only write files when --out is passed
+spike_*.json
