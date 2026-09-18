@@ -1,7 +1,8 @@
 """Shared fixtures: tiny silent audio files with tag surgery via mutagen.
 
 MP3s get real ID3 frames (TPE1/TALB/TDRC + TXXX for MBIDs — Picard's layout);
-FLACs get Vorbis comments. Matches what the reader must handle in the wild.
+FLACs get Vorbis comments; M4As get © atoms + iTunes freeform atoms for MBIDs.
+Matches what the reader must handle in the wild.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from pathlib import Path
 import pytest
 from mutagen.flac import FLAC
 from mutagen.id3 import ID3, TALB, TPE1, TXXX
+from mutagen.mp4 import MP4
 
 FFMPEG = shutil.which("ffmpeg")
 
@@ -25,14 +27,26 @@ TAG_SPECS = {
     "recording_mbid": ("musicbrainz_trackid", lambda v: TXXX(encoding=3, desc="MusicBrainz Track Id", text=v)),
 }
 
+# fixture kwarg name -> MP4 atom key (© atoms for basics; freeform for MBIDs)
+MP4_TAG_SPECS = {
+    "artist": "\xa9ART",
+    "album": "\xa9alb",
+    "album_mbid": "----:com.apple.iTunes:MusicBrainz Album Id",
+    "recording_mbid": "----:com.apple.iTunes:MusicBrainz Track Id",
+}
 
-def _ffmpeg_silent(target: Path) -> None:
+
+def _ffmpeg_silent(target: Path, with_m4a_mbids: bool = False) -> None:
     assert FFMPEG, "ffmpeg required for fixture generation"
-    subprocess.run(
-        [FFMPEG, "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "0.05", "-y", str(target)],
-        check=True,
-        capture_output=True,
-    )
+    args = [FFMPEG, "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-t", "0.05", "-y"]
+    if with_m4a_mbids:
+        # metadata writes freeform atoms usable as MP4 MBID fixtures
+        args += [
+            "-metadata", "artist=M4A Artist",
+            "-metadata", "musicbrainz_artistid=99999999-8888-7777-6666-555555555555",
+        ]
+    args.append(str(target))
+    subprocess.run(args, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="session")
@@ -42,13 +56,24 @@ def make_audio():
     def _make(directory: Path, filename: str, **tags) -> Path:
         target = directory / filename
         target.parent.mkdir(parents=True, exist_ok=True)
-        _ffmpeg_silent(target)
+        _ffmpeg_silent(target, with_m4a_mbids=target.suffix == ".m4a")
         if target.suffix == ".mp3":
             id3 = ID3()
             for name, (_, make_frame) in TAG_SPECS.items():
                 if tags.get(name) is not None:
                     id3.add(make_frame(str(tags[name])))
             id3.save(target)
+        elif target.suffix == ".m4a":
+            mp4 = MP4(target)
+            for name, mp4_key in MP4_TAG_SPECS.items():
+                if tags.get(name) is not None:
+                    value = str(tags[name])
+                    # © text atoms hold str lists; freeform '----' atoms hold bytes lists
+                    mp4[mp4_key] = [value.encode()] if mp4_key.startswith("----") else [value]
+            if tags.get("artist_mbid") is not None:
+                # Picard's freeform atom layout — matches real-library files
+                mp4["----:com.apple.iTunes:MusicBrainz Artist Id"] = [str(tags["artist_mbid"]).encode()]
+            mp4.save()
         else:
             flac = FLAC(target)
             for name, (vorbis_key, _) in TAG_SPECS.items():
@@ -72,6 +97,9 @@ def sample_library(make_audio, tmp_path_factory: pytest.TempPathFactory):
                artist_mbid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     untagged = root / "Mystery Artist" / "Unknown"
     make_audio(untagged, "01 - Track.mp3")  # no tags at all
+    m4a_dir = root / "M4A Artist" / "Album"
+    make_audio(m4a_dir, "01 - Track.m4a", artist="M4A Artist",
+               artist_mbid="99999999-8888-7777-6666-555555555555")
     (root / "Broken Artist").mkdir()
     (root / "Broken Artist" / "bad.mp3").write_bytes(b"not audio at all")
     return root

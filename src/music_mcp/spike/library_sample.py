@@ -22,19 +22,36 @@ from mutagen import File as mutagen_file
 
 AUDIO_SUFFIXES = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wma", ".wav"}
 
-# Each field: candidate tag keys across tag systems. Vorbis comments (FLAC/Ogg) use
-# lowercase names; ID3 (MP3) uses frame IDs, with MBIDs in TXXX frames keyed by
-# description (Picard's convention). easy=True would HIDE TXXX frames, so we read raw.
+# Tag keys per tag system. Vorbis comments (FLAC/Ogg) use lowercase names; ID3 (MP3)
+# uses frame IDs, with MBIDs in TXXX frames keyed by description (Picard's convention).
+# MP4/M4A uses © atoms, MBIDs in '----:com.apple.iTunes:' freeform atoms. easy=True
+# would HIDE TXXX frames, so we read raw tags and dispatch on their class.
 MBID_TAGS = {
-    "artist_mbid": ("musicbrainz_artistid", "TXXX:MusicBrainz Artist Id"),
-    "album_mbid": ("musicbrainz_albumid", "TXXX:MusicBrainz Album Id"),
-    "recording_mbid": ("musicbrainz_trackid", "TXXX:MusicBrainz Track Id"),
-    "release_track_mbid": ("musicbrainz_releasetrackid", "TXXX:MusicBrainz Release Track Id"),
+    "artist_mbid": {
+        "vorbis": "musicbrainz_artistid",
+        "id3": "TXXX:MusicBrainz Artist Id",
+        "mp4": "----:com.apple.iTunes:MusicBrainz Artist Id",
+    },
+    "album_mbid": {
+        "vorbis": "musicbrainz_albumid",
+        "id3": "TXXX:MusicBrainz Album Id",
+        "mp4": "----:com.apple.iTunes:MusicBrainz Album Id",
+    },
+    "recording_mbid": {
+        "vorbis": "musicbrainz_trackid",
+        "id3": "TXXX:MusicBrainz Track Id",
+        "mp4": "----:com.apple.iTunes:MusicBrainz Track Id",
+    },
+    "release_track_mbid": {
+        "vorbis": "musicbrainz_releasetrackid",
+        "id3": "TXXX:MusicBrainz Release Track Id",
+        "mp4": "----:com.apple.iTunes:MusicBrainz Release Track Id",
+    },
 }
 BASIC_TAGS = {
-    "artist": ("artist", "TPE1"),
-    "album": ("album", "TALB"),
-    "date": ("date", "TDRC"),
+    "artist": {"vorbis": "artist", "id3": "TPE1", "mp4": "\xa9ART"},
+    "album": {"vorbis": "album", "id3": "TALB", "mp4": "\xa9alb"},
+    "date": {"vorbis": "date", "id3": "TDRC", "mp4": "\xa9day"},
 }
 
 
@@ -49,6 +66,17 @@ def _vorbis_get(tags: object, key: str) -> str | None:
     return None
 
 
+def _first_str(value: object) -> str | None:
+    """Coerce a tag value (str, list, or bytes — MP4 atoms may hold bytes) to str."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    return str(value) if value else None
+
+
 def _id3_get(tags: object, key: str) -> str | None:
     """ID3 lookup: plain frames (TPE1) or TXXX frames addressed as 'TXXX:<desc>'."""
     frame = getattr(tags, "get", lambda _k, default=None: default)(key)
@@ -57,7 +85,13 @@ def _id3_get(tags: object, key: str) -> str | None:
     text = getattr(frame, "text", None)
     if text:
         return str(text[0])
-    return str(frame)
+    return _first_str(frame)
+
+
+def _mp4_get(tags: object, key: str) -> str | None:
+    """MP4 lookup: freeform '----:com.apple.iTunes:*' atoms hold lists of bytes."""
+    value = getattr(tags, "get", lambda _k, default=None: default)(key)
+    return _first_str(value)
 
 
 def read_tags(path: Path) -> dict:
@@ -76,9 +110,16 @@ def read_tags(path: Path) -> dict:
     if tags is None:
         info["error"] = "no tags"
         tags = {}
-    is_id3 = type(tags).__name__ == "ID3"  # mutagen.id3.ID3; vorbis tags are dict-like with list values
-    for field, (vorbis_key, id3_key) in {**MBID_TAGS, **BASIC_TAGS}.items():
-        info[field] = _id3_get(tags, id3_key) if is_id3 else _vorbis_get(tags, vorbis_key)
+    system = type(tags).__name__
+    key_style = {"ID3": "id3", "MP4Tags": "mp4"}.get(system, "vorbis")
+    for field, keys in {**MBID_TAGS, **BASIC_TAGS}.items():
+        key = keys[key_style]
+        if key_style == "id3":
+            info[field] = _id3_get(tags, key)
+        elif key_style == "mp4":
+            info[field] = _mp4_get(tags, key)
+        else:
+            info[field] = _vorbis_get(tags, key)
     info["bitrate"] = getattr(audio.info, "bitrate", None)
     info["format"] = type(audio).__name__
     return info

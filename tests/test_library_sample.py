@@ -16,6 +16,21 @@ def test_read_tags_extracts_mbids(sample_library: Path):
     assert tags["artist"] == "Tagged Artist"
 
 
+def test_read_tags_handles_flac_vorbis(sample_library: Path):
+    flac_file = next((sample_library / "Tagged Artist" / "Album (2020)").glob("*.flac"))
+    tags = ls.read_tags(flac_file)
+    assert tags["artist_mbid"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    assert tags["artist"] == "Tagged Artist"
+
+
+def test_read_tags_handles_mp4_freeform_atoms(sample_library: Path):
+    m4a_file = next((sample_library / "M4A Artist" / "Album").glob("*.m4a"))
+    tags = ls.read_tags(m4a_file)
+    assert tags["readable"] is True
+    assert tags["artist"] == "M4A Artist"
+    assert tags["artist_mbid"] == "99999999-8888-7777-6666-555555555555"
+
+
 def test_read_tags_survives_garbage_file(sample_library: Path):
     tags = ls.read_tags(sample_library / "Broken Artist" / "bad.mp3")
     assert tags["readable"] is False
@@ -25,14 +40,14 @@ def test_read_tags_survives_garbage_file(sample_library: Path):
 def test_sample_library_counts_and_coverage(sample_library: Path):
     result = ls.sample_library(sample_library, max_artists=10)
     summary = result["summary"]
-    assert summary["files_seen"] == 4  # 3 valid + 1 garbage .mp3 (seen, then unreadable)
-    assert summary["files_readable"] == 3
-    assert summary["coverage_pct"]["artist_mbid"] == 66.7  # 2 of 3 readable files tagged
+    assert summary["files_seen"] == 5  # 4 valid + 1 garbage .mp3 (seen, then unreadable)
+    assert summary["files_readable"] == 4
+    assert summary["coverage_pct"]["artist_mbid"] == 75.0  # 3 of 4 readable files tagged
     assert summary["unreadable_dirs"] == []  # garbage file is per-file, not per-dir
 
 
-def test_mbid_tags_registry_has_both_naming_schemes():
-    from music_mcp.spike.library_sample import MBID_TAGS  # noqa: F401  (re-import documents intent)
+def test_mbid_tags_registry_covers_all_tag_systems():
+    from music_mcp.spike.library_sample import MBID_TAGS
 
     for keys in MBID_TAGS.values():
-        assert len(keys) == 2  # vorbis-comment style + ID3 frame style
+        assert set(keys) == {"vorbis", "id3", "mp4"}  # FLAC/Ogg + MP3 + M4A naming
