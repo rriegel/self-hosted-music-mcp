@@ -1,0 +1,27 @@
+name: Privacy guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  no-personal-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check tracked files for personal locations
+        run: |
+          # Personal machine paths, hostnames, and domains must never enter the repo.
+          # Deliberate keeps: GitHub username (repo URLs), ListenBrainz username in
+          # spike *output* files (LB profiles are public by design).
+          if grep -rInE '/beelink|/opt/data|/mnt/terra|rriegel-box|riegelmedia' \
+              --include='*.py' --include='*.md' --include='*.json' \
+              --include='*.toml' --include='*.yml' \
+              --exclude-dir=.venv . ; then
+            echo "::error::Personal paths/hostnames found in tracked files — see README Configuration section"
+            exit 1
+          fi
+          echo "clean"
