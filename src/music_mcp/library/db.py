@@ -1,0 +1,90 @@
+"""SQLite cache for the library index.
+
+WAL mode (proven in the Phase 0 smoke test): concurrent agent readers while a
+cron-style writer commits. MB data later joins the same DB — schema stays
+library-only for now.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS artists (
+    artist_mbid TEXT PRIMARY KEY,
+    name TEXT,                          -- best known name; may be NULL until resolved
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS albums (
+    album_mbid TEXT,
+    artist_mbid TEXT,
+    title TEXT,                         -- album tag; folder-derived title when untagged
+    folder TEXT NOT NULL,               -- relative album dir, e.g. 'Artist/Album (2020)'
+    date TEXT,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    PRIMARY KEY (folder),
+    FOREIGN KEY (artist_mbid) REFERENCES artists (artist_mbid)
+);
+CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums (artist_mbid);
+
+CREATE TABLE IF NOT EXISTS tracks (
+    path TEXT PRIMARY KEY,              -- absolute path; identity of a file
+    parent_folder TEXT NOT NULL,        -- relative album dir (join key to albums)
+    filename TEXT NOT NULL,
+    suffix TEXT NOT NULL,
+    format TEXT,                        -- mutagen class name (MP3, FLAC, MP4...)
+    bitrate INTEGER,
+    artist_mbid TEXT,
+    album_mbid TEXT,
+    release_track_mbid TEXT,
+    recording_mbid TEXT,
+    artist TEXT,
+    album TEXT,
+    date TEXT,
+    readable INTEGER NOT NULL DEFAULT 1,
+    error TEXT,                         -- last read error, NULL when healthy
+    mtime REAL NOT NULL,                -- source-of-truth for incremental scans
+    size INTEGER NOT NULL,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    FOREIGN KEY (artist_mbid) REFERENCES artists (artist_mbid)
+);
+CREATE INDEX IF NOT EXISTS idx_tracks_parent ON tracks (parent_folder);
+CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist_mbid);
+"""
+
+
+def connect(db_path: Path | str) -> sqlite3.Connection:
+    """Open the cache with WAL enabled and the schema applied. Rows use dict access."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.executescript(SCHEMA)
+    return conn
+
+
+def current_schema_version(conn: sqlite3.Connection) -> int:
+    """Read the schema version, creating the marker row on first call."""
+    row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+    if row is None:
+        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '1')")
+        conn.commit()
+        return 1
+    return int(row["value"])
+
+
+def db_file_sidecars(db_path: Path | str) -> list[Path]:
+    """The WAL/SHM sidecar files for a db path (informational; SQLite manages them)."""
+    base = Path(db_path)
+    return [base.with_suffix(base.suffix + suffix) for suffix in ("-wal", "-shm")]
