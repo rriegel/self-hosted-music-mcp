@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import time
 
+from music_mcp.listens.credits import split_credit
+
 AUTO_APPLY_SCORE = 95
 
 RESOLUTIONS_SCHEMA = """
@@ -54,6 +56,12 @@ def propose(client, conn, max_artists: int = 25) -> dict:
     """Search MB for each untagged artist; store best candidate (or none).
 
     client: MBClient or a test double with search_artist().
+
+    Multi-artist folder names ('Armand Hammer;The Alchemist') are split on
+    separators and each part searched (whole string first — MB indexes some
+    compound names directly). Best candidate across all attempts wins; the
+    confidence compares the candidate name against the *matched* part, and a
+    part-match caps auto-apply (multi-artist folders are ambiguous by nature).
     """
     _ensure_resolutions_table(conn)
     artists = untagged_artists(conn, limit=max_artists)
@@ -62,9 +70,20 @@ def propose(client, conn, max_artists: int = 25) -> dict:
         name = artist["name"] or ""
         if not name:
             continue
-        data = client.search_artist(name, limit=3)
-        candidates = data.get("artists", [])
-        best = candidates[0] if candidates else None
+        candidates_to_try = [name] + [p for p in split_credit(name) if p.lower() != name.lower()]
+        best = None
+        matched_part = name
+        for attempt in candidates_to_try:
+            data = client.search_artist(attempt, limit=3)
+            candidates = data.get("artists", [])
+            exact = next((a for a in candidates if (a.get("name") or "").lower() == attempt.lower()), None)
+            pick = exact or (candidates[0] if candidates else None)
+            if pick and (best is None or int(pick.get("score") or 0) > int(best.get("score") or 0)):
+                best = pick
+                matched_part = attempt
+            if exact:
+                break  # exact match for this attempt is as good as it gets
+
         mbid = best.get("id") if best else None
         mb_name = best.get("name") if best else None
         score = int(best.get("score") or 0) if best else 0
@@ -75,8 +94,12 @@ def propose(client, conn, max_artists: int = 25) -> dict:
         elif (mb_name or "").lower() == name.lower():
             confidence, status = ("exact" if mb_name == name else "case-insensitive"), "proposed"
             proposed += 1
+        elif (mb_name or "").lower() == matched_part.lower() and len(candidates_to_try) > 1:
+            # matched a split part, not the whole string: resolvable but ambiguous
+            confidence, status = "fuzzy", "proposed"
+            proposed += 1
         else:
-            confidence, status = "fuzzy", "ambiguous" if score < AUTO_APPLY_SCORE else "proposed"
+            confidence, status = "fuzzy", "ambiguous"
             proposed += 1
 
         conn.execute(
