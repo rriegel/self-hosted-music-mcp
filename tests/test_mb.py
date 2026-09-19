@@ -184,3 +184,45 @@ def test_propose_is_idempotent_and_respects_decisions(cache: sqlite3.Connection,
     assert cache.execute(
         "SELECT status FROM mb_resolutions WHERE folder_artist='Mystery Artist'"
     ).fetchone()["status"] == "applied"
+
+
+def test_full_rescan_preserves_applied_mbids(cache: sqlite3.Connection, library_copy: Path):
+    """Regression: --full rescans re-read untagged files and used to overwrite
+    resolver-applied MBIDs with NULL (disk tags are still absent). Cached MBIDs
+    must survive until the file itself gains a tag."""
+    scanner.scan_library(library_copy, cache)
+    cache.execute(
+        "INSERT OR REPLACE INTO artists (artist_mbid, name, first_seen, last_seen) "
+        "VALUES ('mmmm-1111', 'Mystery Artist', 't', 't')"
+    )
+    cache.execute("UPDATE tracks SET artist_mbid='mmmm-1111' WHERE artist='Mystery Artist'")
+    cache.commit()
+
+    summary = scanner.scan_library(library_copy, cache, incremental=False)
+
+    row = cache.execute("SELECT artist_mbid FROM tracks WHERE artist='Mystery Artist'").fetchone()
+    assert row["artist_mbid"] == "mmmm-1111"  # survived the full rescan
+    # sanity: file WITH a tag still updates normally (tag wins when present)
+    tagged = cache.execute(
+        "SELECT artist_mbid FROM tracks WHERE artist_mbid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'"
+    ).fetchone()
+    assert tagged is not None
+    assert summary["updated"] == 5
+
+
+def test_dupes_untagged_artists_do_not_cross_group(cache: sqlite3.Connection, sample_library: Path):
+    """Regression: 'Greatest Hits' under two different UNTAGGED artists must not
+    group as one artist's duplicate set ('unknown' key bug from real data)."""
+    scanner.scan_library(sample_library, cache)
+    # two different untagged artists, same album title
+    for _name, folder in [("Artist X", "Artist X/Greatest Hits"), ("Artist Y", "Artist Y/Greatest Hits")]:
+        cache.execute(
+            "INSERT INTO albums (album_mbid, artist_mbid, title, folder, date, first_seen, last_seen) "
+            "VALUES (NULL, NULL, 'Greatest Hits', ?, NULL, 't', 't')",
+            (folder,),
+        )
+    cache.commit()
+    dupes = quality.library_find_dupes(cache, scope="title")
+    rows = dupes["findings"].get("same_title_same_artist", [])
+    # 'Greatest Hits' under Artist X vs Artist Y must NOT group together
+    assert not any("Greatest Hits" in (r["title"] or "") for r in rows)

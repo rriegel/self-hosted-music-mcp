@@ -37,16 +37,20 @@ def library_find_dupes(conn: sqlite3.Connection, scope: str = "all") -> dict:
         findings["same_release_multiple_folders"] = [dict(r) for r in rows]
 
     if scope in ("title", "all"):
+        # Group untagged artists by NAME, not a shared 'unknown' key — otherwise
+        # different untagged artists with a common album title fake a dupe.
+        conn.create_function("_norm_artist", 1, lambda v: _norm_title(v) if v else f"untagged:{v}")
         rows = conn.execute(
             """
-            SELECT COALESCE(a.artist_mbid, 'unknown') AS artist_key,
+            SELECT COALESCE(a.artist_mbid, 'untagged:' || t.artist) AS artist_key,
                    MAX(a.artist_mbid) AS artist_mbid,
                    MAX(a.title) AS title,
                    COUNT(*) AS copies,
                    GROUP_CONCAT(a.folder, ' || ') AS where_
             FROM albums a
+            JOIN tracks t ON t.parent_folder = a.folder
             GROUP BY artist_key, _norm(a.title)
-            HAVING COUNT(*) > 1
+            HAVING COUNT(DISTINCT a.folder) > 1
             """
         ).fetchall()
         findings["same_title_same_artist"] = [dict(r) for r in rows]

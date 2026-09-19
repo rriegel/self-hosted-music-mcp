@@ -27,18 +27,6 @@ def cache(tmp_path: Path) -> Generator[sqlite3.Connection]:
     conn.close()
 
 
-@pytest.fixture()
-def library_copy(tmp_path: Path, sample_library: Path) -> Path:
-    """A writable copy of the fixture library — tests that mutate files use this.
-
-    The checked-in fixture tree is shared read-only state; mutating it (unlink,
-    chmod) would break every other test and race concurrent runs.
-    """
-    target = tmp_path / "library"
-    shutil.copytree(sample_library, target)
-    return target
-
-
 def test_connect_enables_wal(cache: sqlite3.Connection):
     mode = cache.execute("PRAGMA journal_mode").fetchone()[0]
     assert mode == "wal"
