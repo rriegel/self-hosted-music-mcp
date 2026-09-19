@@ -25,6 +25,23 @@ def _db_path(pulled: dict) -> Path:
     return Path(pulled.get("--db") or os.environ.get("MUSIC_DB") or "library-index.db")
 
 
+def _guard_empty_index(conn, db_path: Path, command: str) -> None:
+    """Refuse resolve/apply against an index with no tracks — a fresh/empty DB
+    silently produces happy-looking empty results (real Phase 3 incident: the
+    CLI default created ./library-index.db and resolve 'succeeded' on nothing)."""
+    tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+    if tracks == 0:
+        print(json.dumps({
+            "error": f"no tracks in {db_path} — refusing to {command} against an empty index",
+            "hint": (
+                "is MUSIC_DB pointing at your scanned cache? "
+                "scan first: uv run python -m music_mcp.library scan "
+                f"--db {db_path}"
+            ),
+        }))
+        sys.exit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     pulled, rest = split_global_flags(argv, VALUE_FLAGS, BOOL_FLAGS)
@@ -52,7 +69,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(reinstate(pulled) + rest)
 
-    conn = db.connect(_db_path(pulled))
+    db_path = _db_path(pulled)
+    conn = db.connect(db_path)
     try:
         if args.command == "artist":
             result = mb_artist(MBClient(conn), args.mbid)
@@ -63,8 +81,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "lookup":
             result = mb_lookup(MBClient(conn), args.mbid or "", args.entity)
         elif args.command == "resolve":
+            _guard_empty_index(conn, db_path, command="resolve")
             result = resolver.propose(MBClient(conn), conn, max_artists=args.max)
         elif args.command == "apply":
+            _guard_empty_index(conn, db_path, command="apply")
             result = resolver.commit(MBClient(conn), conn, batch_size=args.batch_size)
         else:  # pragma: no cover
             parser.error(f"unknown command: {args.command}")
