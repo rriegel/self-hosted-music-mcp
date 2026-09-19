@@ -10,7 +10,9 @@ Planning docs live outside this repo (Obsidian vault). This repo is code + tests
 
 ## Status
 
-Phase 0 — spike. Proving the MBID join on real data before building anything.
+Phase 3 (MusicBrainz layer + name→MBID resolver) — code on branch, real-data verified.
+Phases 1 (library index) and 2 (ListenBrainz listens) are merged. Next: Phase 4 —
+compound `discovery_*` tools and MCP server wiring.
 
 ## Setup
 
@@ -53,10 +55,11 @@ uncommitted `.env` file:
 
 | Variable | Used by | Example |
 |---|---|---|
-| `MUSIC_LIBRARY_ROOT` | `library_sample` | `/path/to/music` |
-| `MUSIC_WATCHLIST` | `join_e2e` | `/path/to/watchlist.json` |
-| `LB_USER` | `lb_check` | ListenBrainz username |
-| `LB_TOKEN` | `lb_check` | ListenBrainz user token (optional; public data works without it) |
+| `MUSIC_LIBRARY_ROOT` | `library` scan | `/path/to/music` |
+| `MUSIC_DB` | all index/cache commands | `/path/to/music-index.db` |
+| `LB_USER` | `listens` sync/reports | ListenBrainz username |
+| `LB_TOKEN` | `listens sync` | ListenBrainz user token (optional; public data works without it) |
+| `MUSIC_WATCHLIST` | spike `join_e2e` only | `/path/to/watchlist.json` |
 
 Every value can also be passed as a CLI argument (`--help` shows which), which wins
 over the env var.
@@ -130,3 +133,46 @@ Report windows: `--min-listens` (gap threshold), `--months` (stale window),
 against library names, so owned collaborations don't fake a gap. Truly-unowned
 and owned-but-untagged artists both remain listed — the Phase 3 name→MBID
 resolver separates them.
+
+## MusicBrainz layer + resolver (Phase 3)
+
+Rate-limited (1 req/s) MusicBrainz lookups with a 30-day SQLite response cache
+(MB metadata is effectively immutable), plus the resolver that assigns MBIDs to
+untagged library artists.
+
+```sh
+uv run python -m music_mcp.mb artist <artist_mbid>        # artist metadata (cached)
+uv run python -m music_mcp.mb releases <artist_mbid>      # official album/EP release-groups
+uv run python -m music_mcp.mb search --query "Name"       # alias-aware artist search
+uv run python -m music_mcp.mb lookup --mbid <mbid> --entity release
+
+uv run python -m music_mcp.mb resolve                     # propose MBIDs for untagged artists
+uv run python -m music_mcp.mb apply                       # write confident proposals into the index
+```
+
+**How resolution works (propose → review → apply):**
+- `resolve` is read-only: it searches MB for each untagged artist in the index
+  (splitting multi-artist folder names like `A;B`), and stores candidates with a
+  confidence label (`exact` / `case-insensitive` / `fuzzy` / `none`). Expect several
+  minutes for a full library (MB rate limit); every response is cached, so re-runs
+  are free.
+- `apply` writes only confident matches (exact/case-insensitive name at score ≥95)
+  into the **index** — it never writes to your audio files' tags. Applied MBIDs
+  survive `--full` rescans (files that later gain real tags win). Fuzzy and
+  part-match proposals stay unapplied for your review.
+- `resolve`/`apply` refuse empty indexes, so a misplaced `MUSIC_DB` announces itself
+  instead of returning a happy empty result.
+
+**Library intelligence over the index:**
+
+```sh
+uv run python -m music_mcp.library dupes                   # duplicate releases / mislabeled folders
+uv run python -m music_mcp.library dupes --scope folder    # or release_group / title
+uv run python -m music_mcp.library quality                 # tag gaps, credit variants, bitrates
+uv run python -m music_mcp.library quality --min-bitrate 256000
+```
+
+`dupes` reports three signals: the same release MBID in multiple folders (true
+duplicates), the same normalized album title within one artist, and a folder whose
+files carry multiple release identities. `quality` shows missing-MBID percentages,
+artists credited several ways, and below-threshold bitrates per format.

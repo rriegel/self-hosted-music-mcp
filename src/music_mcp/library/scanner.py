@@ -243,9 +243,10 @@ def _commit_batch(conn, batch: list[tuple], now: str) -> None:
         ON CONFLICT(path) DO UPDATE SET
             parent_folder=excluded.parent_folder, filename=excluded.filename,
             suffix=excluded.suffix, format=excluded.format, bitrate=excluded.bitrate,
-            artist_mbid=excluded.artist_mbid, album_mbid=excluded.album_mbid,
-            release_track_mbid=excluded.release_track_mbid,
-            recording_mbid=excluded.recording_mbid,
+            artist_mbid=COALESCE(excluded.artist_mbid, tracks.artist_mbid),
+            album_mbid=COALESCE(excluded.album_mbid, tracks.album_mbid),
+            release_track_mbid=COALESCE(excluded.release_track_mbid, tracks.release_track_mbid),
+            recording_mbid=COALESCE(excluded.recording_mbid, tracks.recording_mbid),
             artist=excluded.artist, album=excluded.album, date=excluded.date,
             readable=excluded.readable, error=excluded.error, mtime=excluded.mtime,
             size=excluded.size, last_seen=excluded.last_seen

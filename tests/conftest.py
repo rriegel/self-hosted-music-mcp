@@ -50,6 +50,18 @@ def sample_library() -> Path:
     return FIXTURES_DIR
 
 
+@pytest.fixture()
+def library_copy(tmp_path: Path, sample_library: Path) -> Path:
+    """A writable copy of the fixture library — tests that mutate files use this.
+
+    The checked-in fixture tree is shared read-only state; mutating it (unlink,
+    chmod) would break every other test and race concurrent runs.
+    """
+    target = tmp_path / "library"
+    shutil.copytree(sample_library, target)
+    return target
+
+
 @pytest.fixture(scope="session")
 def make_audio():
     """Factory for NEW silent audio files with tag surgery: make_audio(dir, 'x.mp3', artist=...).
