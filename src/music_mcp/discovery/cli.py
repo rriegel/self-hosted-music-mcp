@@ -10,13 +10,14 @@ import sys
 from pathlib import Path
 
 from music_mcp.args import reinstate, split_global_flags
-from music_mcp.discovery import recommend
+from music_mcp.discovery import recommend, releases
 from music_mcp.discovery import watchlist as wl
 from music_mcp.library import db
+from music_mcp.mb.client import MBClient
 
 VALUE_FLAGS = {
     "--db", "--mbid", "--limit", "--offset", "--exclude", "--seed-limit", "--per-seed",
-    "--filter", "--min-seed-listens", "--path", "--source",
+    "--filter", "--min-seed-listens", "--path", "--source", "--since-days", "--rank",
 }
 BOOL_FLAGS: set[str] = set()
 
@@ -38,10 +39,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed-limit", type=int, default=10, help="recommendations: top N listened seeds")
     parser.add_argument("--per-seed", type=int, default=15, help="recommendations: neighbors per seed")
     parser.add_argument("--min-seed-listens", type=int, default=5, help="recommendations: seed threshold")
-    parser.add_argument("--filter", dest="filter_mode", default="not_in_library",
+    parser.add_argument("--rec-filter", dest="filter_mode", default="not_in_library",
                         choices=["not_in_library", "in_library_unplayed", "all"],
                         help="recommendations: which candidates to keep")
+    parser.add_argument("--filter", dest="release_filter", default="watchlist",
+                        choices=["owned", "listened", "watchlist", "all"],
+                        help="new-releases: which artists' releases to keep")
     parser.add_argument("--path", default=None, help="watchlist import/export file path")
+    parser.add_argument("--with-genres", action="store_true", help="new-releases: enrich with MB genres")
+    parser.add_argument("--since-days", type=int, default=7, help="new-releases: window length (days)")
+    parser.add_argument("--rank", default="play_count", choices=["play_count", "affinity", "date"],
+                        help="new-releases: ranking")
+    parser.add_argument("--listened-within", type=int, default=None, help="playlist: listened within N days")
+    parser.add_argument("--not-listened-within", type=int, default=None, help="playlist: NOT listened within N days")
+    parser.add_argument("--seed", type=int, default=None, help="playlist: random seed")
     sub = parser.add_subparsers(dest="command", required=True)
 
     imp = sub.add_parser("watchlist-import", help="import (merge) the radar watchlist.json")
@@ -56,6 +67,15 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("similar", help="LB similar artists for --mbid")
     sub.add_parser("recommendations", help="similar-graph x library recommendations")
+    rel = sub.add_parser("new-releases", help="MB release window joined to owned/listened/watchlist")
+    rel.add_argument("--since-days", type=int, default=7, help="release window length (days)")
+    rel.add_argument("--rank", default="play_count", choices=["play_count", "affinity", "date"])
+    rel.add_argument("--with-genres", action="store_true", help="enrich with MB genres (cached)")
+    pl = sub.add_parser("playlist", help="constraint tracklist from your own files (m3u-ready)")
+    pl.add_argument("--artists", default=None, help="artist MBID filter")
+    pl.add_argument("--listened-within", type=int, default=None, help="artists listened in N days")
+    pl.add_argument("--not-listened-within", type=int, default=None, help="artists NOT listened in N days")
+    pl.add_argument("--seed", type=int, default=None, help="random seed for shuffling")
 
     args = parser.parse_args(reinstate(pulled) + rest)
 
@@ -84,6 +104,16 @@ def main(argv: list[str] | None = None) -> int:
             result = recommend.discovery_recommendations(
                 conn, seed_limit=args.seed_limit, per_seed=args.per_seed,
                 filter_mode=args.filter_mode, min_seed_listens=args.min_seed_listens, limit=args.limit,
+            )
+        elif args.command == "new-releases":
+            result = releases.discovery_new_releases(
+                conn, MBClient(conn), filter_mode=args.release_filter, since_days=args.since_days,
+                rank_by=args.rank, limit=args.limit, with_genres=args.with_genres,
+            )
+        elif args.command == "playlist":
+            result = releases.discovery_playlist(
+                conn, artist_mbid=args.mbid, listened_within_days=args.listened_within,
+                not_listened_within_days=args.not_listened_within, limit=args.limit, seed=args.seed,
             )
         else:  # pragma: no cover
             parser.error(f"unknown command: {args.command}")
