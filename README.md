@@ -190,16 +190,18 @@ Wire it into Hermes (env vars resolved at spawn):
 
 ```sh
 hermes mcp add music-mcp \
-  --command uv --args "run,python,-m,music_mcp.server" \
-  --cwd /path/to/self-hosted-music-mcp \
-  --env MUSIC_DB=/path/to/music-index.db \
-  --env MUSIC_LIBRARY_ROOT=/path/to/music \
-  --env LB_USER=your-lb-username
+  --command uv \
+  --env MUSIC_DB=/path/to/music-index.db MUSIC_LIBRARY_ROOT=/path/to/music LB_USER=your-lb-username \
+  --args --project /path/to/self-hosted-music-mcp run python -m music_mcp.server
 ```
 
-(Adjust `--args`/`--env` flags to your Hermes version — `hermes mcp add --help` shows
-the exact syntax. MCP Inspector works too: `npx @modelcontextprotocol/inspector
-uv run python -m music_mcp.server`.)
+(Verified on Hermes v0.19.1 — three gotchas: every KEY=VALUE pair goes after ONE
+`--env` flag, because repeated `--env` flags silently overwrite each other (last
+pair wins); there is no `--cwd`, so `uv --project <repo>` inside `--args` does that
+job; and without MUSIC_DB the server silently opens an empty index, with every tool
+returning zeros instead of erroring. `hermes mcp add --help` shows the exact syntax
+for your version. MCP Inspector works too:
+`npx @modelcontextprotocol/inspector uv run python -m music_mcp.server`.)
 
 22 tools: `library_status/artists/albums/find_dupes/quality_report/scan`,
 `listens_sync/recent/top/gap_analysis/stale_library/new_discoveries`,
