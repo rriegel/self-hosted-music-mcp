@@ -176,3 +176,42 @@ uv run python -m music_mcp.library quality --min-bitrate 256000
 duplicates), the same normalized album title within one artist, and a folder whose
 files carry multiple release identities. `quality` shows missing-MBID percentages,
 artists credited several ways, and below-threshold bitrates per format.
+
+## MCP server (Phase 4)
+
+Every command above is also an MCP tool over stdio — any MCP client (Hermes, Claude
+Code, Inspector) can query the collection directly:
+
+```sh
+uv run python -m music_mcp.server     # stdio transport
+```
+
+Wire it into Hermes (env vars resolved at spawn):
+
+```sh
+hermes mcp add music-mcp \
+  --command uv --args "run,python,-m,music_mcp.server" \
+  --cwd /path/to/self-hosted-music-mcp \
+  --env MUSIC_DB=/path/to/music-index.db \
+  --env MUSIC_LIBRARY_ROOT=/path/to/music \
+  --env LB_USER=your-lb-username
+```
+
+(Adjust `--args`/`--env` flags to your Hermes version — `hermes mcp add --help` shows
+the exact syntax. MCP Inspector works too: `npx @modelcontextprotocol/inspector
+uv run python -m music_mcp.server`.)
+
+22 tools: `library_status/artists/albums/find_dupes/quality_report/scan`,
+`listens_sync/recent/top/gap_analysis/stale_library/new_discoveries`,
+`mb_artist/artist_releases/search/resolve/apply`,
+`discovery_similar_artists/recommendations/new_releases/playlist`, and
+`watchlist_manage` (add/import are the only mutations — everything else is read-only).
+
+Example agent interactions:
+
+```text
+"What's new from artists I actually play?"    -> discovery_new_releases(filter_mode="listened", rank_by="play_count")
+"What should I buy next?"                     -> listens_gap_analysis() + discovery_recommendations(filter_mode="not_in_library")
+"What do I own but never play?"               -> listens_stale_library(months=6)
+"Build a playlist from dormant artists"       -> discovery_playlist(not_listened_within_days=180)
+```
