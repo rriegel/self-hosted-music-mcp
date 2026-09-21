@@ -175,6 +175,22 @@ def discovery_new_releases(
         if keep:
             items.append(entry)
 
+    # Dedupe: MB search returns every physical edition of a release-group, and
+    # pagination can repeat rows across page boundaries. One entry per
+    # release_group_mbid (earliest date wins, first-seen on ties); groupless
+    # releases dedupe on release_mbid. The old note below CLAIMED this happened
+    # — it didn't (2026-09-20 dogfood caught duplicate rows in live output).
+    best: dict[tuple[str, str], dict] = {}
+    order: list[tuple[str, str]] = []
+    for e in items:
+        key = ("rg", e["release_group_mbid"]) if e["release_group_mbid"] else ("rel", e["release_mbid"])
+        if key not in best:
+            best[key] = e
+            order.append(key)
+        elif (e["date"] or "9999") < (best[key]["date"] or "9999"):
+            best[key] = e
+    items = [best[k] for k in order]
+
     if rank_by == "play_count":
         items.sort(key=lambda e: (-(e["play_count"]), e["date"] or "", e["title"] or ""))
     elif rank_by == "affinity":
@@ -199,8 +215,8 @@ def discovery_new_releases(
         "candidates_seen": len(raw),
         "releases": items,
         "count": len(items),
-        "note": "MB releases = physical editions; dedupe happens on release_group_mbid "
-        "(same as the Friday cron). 'all' over a wide window is thousands of rows.",
+        "note": "one entry per release-group (earliest edition); 'all' over a wide "
+        "window is thousands of rows.",
     }
 
 
@@ -232,7 +248,7 @@ def discovery_playlist(
         cutoff = int(time.time()) - listened_within_days * 86400
         where.append(
             "t.artist_mbid IN (SELECT a.artist_mbid FROM artists a "
-            "JOIN listened_artists l ON LOWER(l.artist_name) = LOWER(a.name) "
+            "JOIN listened_artists l ON norm_name(l.artist_name) = norm_name(a.name) "
             "WHERE l.last_listen_ts >= ?)"
         )
         params.append(cutoff)
@@ -241,7 +257,7 @@ def discovery_playlist(
         where.append(
             "(t.artist_mbid IS NULL OR t.artist_mbid NOT IN ("
             "SELECT a2.artist_mbid FROM artists a2 "
-            "JOIN listened_artists l2 ON LOWER(l2.artist_name) = LOWER(a2.name) "
+            "JOIN listened_artists l2 ON norm_name(l2.artist_name) = norm_name(a2.name) "
             "WHERE l2.last_listen_ts >= ?))"
         )
         params.append(cutoff)

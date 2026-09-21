@@ -80,7 +80,8 @@ async def test_library_status_call():
 @pytest.mark.anyio
 async def test_listens_gap_call():
     payload = _payload(await mcp.call_tool("listens_gap_analysis", {"min_listens": 1}))
-    assert "not_owned" in payload
+    assert "true_gaps" in payload and "owned_but_unresolved" in payload
+    assert "not_owned" not in payload
 
 
 @pytest.mark.anyio

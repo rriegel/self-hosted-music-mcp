@@ -28,7 +28,12 @@ mcp = MCPServer(
         "Read-only knowledge layer over a personal music collection: library index, "
         "ListenBrainz listens, MusicBrainz metadata, joined on MBIDs. Start with "
         "library_status / listens_top; discovery tools for radar/recs/playlists. "
-        "File-tag writes never happen; watchlist_manage add/import are the only mutations."
+        "File-tag writes never happen; watchlist_manage add/import are the only mutations. "
+        "listens_gap_analysis returns decision-ready buckets: true_gaps (shopping list — "
+        "confirm via mb_resolve before buying), owned_but_unresolved (NOT purchase targets; "
+        "run mb_resolve to store proposals, review them, then mb_apply to bind the MBIDs), "
+        "junk_suspects (podcast/radio heuristics). Present each bucket separately with its "
+        "suggested_action; never tell the user to buy something in owned_but_unresolved."
     ),
 )
 
@@ -155,7 +160,10 @@ def listens_top(limit: int = 20) -> dict:
 
 @mcp.tool()
 def listens_gap_analysis(min_listens: int = 5) -> dict:
-    """Listened but not owned (shopping list); credit-split matching."""
+    """Listened but maybe-not-owned, bucketed: true_gaps (shopping list),
+    owned_but_unresolved (tag/alias mismatch — fix via mb_resolve + mb_apply,
+    do NOT buy), junk_suspects (podcasts/radio). Each item carries a
+    suggested_action; surface them instead of re-deriving with raw SQL."""
     conn = _conn()
     try:
         return listens_reports.listens_gap_analysis(conn, min_listens=min_listens)
