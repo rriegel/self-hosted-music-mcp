@@ -26,15 +26,19 @@ def cache(tmp_path: Path) -> Generator[sqlite3.Connection]:
 
 
 class FakeMB:
-    """Test double for MBClient: canned search/lookup responses, records calls."""
+    """Test double for MBClient: canned search/lookup/rg responses, records calls."""
 
-    def __init__(self, results: dict[str, list[dict]]):
+    def __init__(self, results: dict[str, list[dict]], rgs: dict[str, list[dict]] | None = None):
         self.results = results  # query name -> candidate list
+        self.rgs = rgs or {}  # artist mbid -> release-group list
         self.calls: list[str] = []
 
     def search_artist(self, name: str, limit: int = 5) -> dict:
         self.calls.append(name)
         return {"artists": self.results.get(name, [])}
+
+    def release_groups(self, mbid: str) -> list[dict]:
+        return self.rgs.get(mbid, [])
 
 
 def _mb_candidate(mbid: str, name: str, score: int) -> dict:
@@ -81,13 +85,20 @@ def test_mb_client_retries_on_503():
 
 def test_propose_stores_candidates(cache: sqlite3.Connection, sample_library: Path):
     scanner.scan_library(sample_library, cache)
-    fake = FakeMB({
-        "Mystery Artist": [_mb_candidate("mmmm-1111", "Mystery Artist", 100)],
-    })
+    # evidence tier: the candidate's MB release-groups include the folder's album
+    # title, so the proposal stays auto-applyable
+    album_title = cache.execute(
+        "SELECT MAX(a.title) FROM albums a JOIN tracks t ON t.parent_folder = a.folder "
+        "WHERE t.artist = 'Mystery Artist'"
+    ).fetchone()[0]
+    fake = FakeMB(
+        {"Mystery Artist": [_mb_candidate("mmmm-1111", "Mystery Artist", 100)]},
+        {("mmmm-1111"): [{"title": album_title or "Mystery Album"}]},
+    )
     result = resolver.propose(fake, cache, max_artists=10)
     assert result["artists_considered"] >= 1
     row = cache.execute(
-        "SELECT proposed_mbid, confidence, status FROM mb_resolutions WHERE folder_artist = 'Mystery Artist'"
+        "SELECT proposed_mbid, confidence, status, evidence FROM mb_resolutions WHERE folder_artist = 'Mystery Artist'"
     ).fetchone()
     assert row is not None
     assert row["proposed_mbid"] == "mmmm-1111"
@@ -110,7 +121,8 @@ def test_propose_marks_no_match(cache: sqlite3.Connection, sample_library: Path)
 def test_commit_applies_confident_and_skips_weak(cache: sqlite3.Connection, sample_library: Path):
     scanner.scan_library(sample_library, cache)
     cache.executemany(
-        "INSERT INTO mb_resolutions VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO mb_resolutions (folder_artist, proposed_mbid, proposed_name, score, "
+        "confidence, status, proposed_at) VALUES (?,?,?,?,?,?,?)",
         [
             ("Mystery Artist", "mmmm-1111", "Mystery Artist", 100, "exact", "proposed", 0),
             ("Weak Match", "wwww-2222", "Weak Matching", 40, "fuzzy", "proposed", 0),

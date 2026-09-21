@@ -203,11 +203,13 @@ returning zeros instead of erroring. `hermes mcp add --help` shows the exact syn
 for your version. MCP Inspector works too:
 `npx @modelcontextprotocol/inspector uv run python -m music_mcp.server`.)
 
-22 tools: `library_status/artists/albums/find_dupes/quality_report/scan`,
+23 tools: `library_status/artists/albums/find_dupes/quality_report/scan`,
 `listens_sync/recent/top/gap_analysis/stale_library/new_discoveries`,
-`mb_artist/artist_releases/search/resolve/apply`,
+`mb_artist/artist_releases/search/resolve/review/apply`,
 `discovery_similar_artists/recommendations/new_releases/playlist`, and
-`watchlist_manage` (add/import are the only mutations — everything else is read-only).
+`watchlist_manage` (add/import are the only watchlist mutations — everything else
+is read-only; `mb_review set` and `mb_apply retarget` are the two supported
+index-correction paths, both cache-only).
 
 Example agent interactions:
 

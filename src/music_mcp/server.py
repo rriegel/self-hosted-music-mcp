@@ -104,10 +104,14 @@ def library_albums(artist: str) -> dict:
 
 @mcp.tool()
 def library_find_dupes(scope: str = "all") -> dict:
-    """Duplicate releases / mislabeled folders. scope: all|release_group|title|folder."""
+    """Duplicate releases / mislabeled folders / split artist entities.
+    scope: all|release_group|title|folder|artist_entities (entities needs MB;
+    detects one real artist cataloged under multiple MBIDs)."""
+
     conn = _conn()
     try:
-        return quality.library_find_dupes(conn, scope=scope)
+        client = MBClient(conn) if scope == "artist_entities" else None
+        return quality.library_find_dupes(conn, scope=scope, client=client)
     finally:
         conn.close()
 
@@ -241,12 +245,49 @@ def mb_resolve(max_artists: int = 25) -> dict:
 
 
 @mcp.tool()
-def mb_apply(batch_size: int = 10) -> dict:
-    """Apply confident resolver proposals into the index (never file tags)."""
+def mb_apply(
+    action: str = "apply", batch_size: int = 10,
+    from_mbid: str | None = None, into_mbid: str | None = None,
+) -> dict:
+    """Apply resolver proposals into the index (action='apply'; never file tags),
+    or merge a duplicate MB entity (action='retarget', needs from_mbid+into_mbid;
+    moves albums/tracks to the canonical entity, cache-only)."""
     conn = _conn()
     try:
         _require_tracks(conn)
+        if action == "retarget":
+            if not from_mbid or not into_mbid:
+                raise ValueError("retarget requires from_mbid and into_mbid")
+            return resolver.retarget(conn, from_mbid=from_mbid, into_mbid=into_mbid)
+        if action != "apply":
+            raise ValueError(f"unknown action: {action}")
         return resolver.commit(MBClient(conn), conn, batch_size=batch_size)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def mb_review(
+    action: str = "list", status: str | None = None,
+    folder_artist: str | None = None, mbid: str | None = None, name: str | None = None,
+) -> dict:
+    """Review resolver proposals. action: list (all proposals + evidence) |
+    set (correct one after MB verification: folder_artist + mbid[, name]) |
+    reject (folder_artist). set marks it manually-verified so commit applies it."""
+    conn = _conn()
+    try:
+        _require_tracks(conn)
+        if action == "list":
+            return resolver.review_list(conn, status=status)
+        if action == "set":
+            if not folder_artist or not mbid:
+                raise ValueError("set requires folder_artist and mbid")
+            return resolver.review_set(conn, folder_artist=folder_artist, mbid=mbid, name=name)
+        if action == "reject":
+            if not folder_artist:
+                raise ValueError("reject requires folder_artist")
+            return resolver.review_reject(conn, folder_artist=folder_artist)
+        raise ValueError(f"unknown action: {action}")
     finally:
         conn.close()
 

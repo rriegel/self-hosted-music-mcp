@@ -101,8 +101,9 @@ CREATE TABLE IF NOT EXISTS mb_resolutions (
     proposed_name TEXT,
     score INTEGER,
     confidence TEXT,                    -- 'exact' | 'case-insensitive' | 'fuzzy' | 'none'
-    status TEXT NOT NULL DEFAULT 'proposed',   -- proposed | applied | rejected | ambiguous
-    proposed_at REAL NOT NULL
+    status TEXT NOT NULL DEFAULT 'proposed',   -- proposed | applied | rejected | ambiguous | needs_review
+    proposed_at REAL NOT NULL,
+    evidence TEXT                              -- why this proposal: name match + album-title overlap
 );
 
 -- Watchlist (schema v4): MCP-owned artist watchlist for release radar / discovery.
