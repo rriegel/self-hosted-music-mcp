@@ -20,6 +20,7 @@ EXPECTED_TOOLS = {
     "listens_sync", "listens_recent", "listens_top", "listens_gap_analysis",
     "listens_stale_library", "listens_new_discoveries",
     "mb_artist", "mb_artist_releases", "mb_search", "mb_resolve", "mb_apply",
+    "mb_review",
     "discovery_similar_artists", "discovery_recommendations",
     "discovery_new_releases", "discovery_playlist",
     "watchlist_manage",

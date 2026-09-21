@@ -21,7 +21,90 @@ def _norm_title(title: str | None) -> str:
     return "".join(ch for ch in folded.lower() if ch.isalnum())
 
 
-def library_find_dupes(conn: sqlite3.Connection, scope: str = "all") -> dict:
+def _rg_overlap(titles_a: list[str], titles_b: list[str]) -> list[str]:
+    """Normalized shared release-group titles (exact any length; containment >=4)."""
+
+    def norm(t: str) -> str:
+        folded = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode()
+        return "".join(ch for ch in folded.lower() if ch.isalnum())
+
+    shared: list[str] = []
+    for tb in titles_b:
+        nb = norm(tb)
+        if not nb:
+            continue
+        for ta in titles_a:
+            na = norm(ta)
+            if not na:
+                continue
+            # exact equality counts at any length ('AMA' is 3 chars and IS the
+            # incident's key title); containment requires >=4 to avoid noise
+            if na == nb or (len(na) >= 4 and na in nb) or (len(nb) >= 4 and nb in na):
+                shared.append(tb)
+                break
+    return sorted(set(shared))
+
+
+def _artist_entity_dupes(conn: sqlite3.Connection, client) -> list[dict]:
+    """Detect one real artist split across multiple MB entities (upstream MB dupes).
+
+    Candidates: distinct indexed artist pairs sharing a top-level folder prefix
+    ('Ama/...' holds both be578aa2 'AMA' and 2d2f1395 'Ama Lou'). Confirmed only
+    when their MB release-group title sets overlap. Read-only; fixing is
+    mb_apply retarget's job.
+    """
+    if client is None:
+        raise ValueError("scope='artist_entities' needs an MB client (MB release-group lookups)")
+    candidates = conn.execute(
+        """
+        SELECT a.artist_mbid AS mbid_a, b.artist_mbid AS mbid_b,
+               MAX(a.name) AS name_a, MAX(b.name) AS name_b,
+               MAX(ta.folder) AS folder_a, MAX(tb.folder) AS folder_b
+        FROM artists a
+        JOIN artists b ON a.artist_mbid < b.artist_mbid
+        JOIN albums ta ON ta.artist_mbid = a.artist_mbid
+        JOIN albums tb ON tb.artist_mbid = b.artist_mbid
+        WHERE substr(ta.folder, 1, instr(ta.folder || '/', '/') - 1)
+            = substr(tb.folder, 1, instr(tb.folder || '/', '/') - 1)
+        GROUP BY a.artist_mbid, b.artist_mbid
+        """
+    ).fetchall()
+
+    findings: list[dict] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for row in candidates:
+        pair = (row["mbid_a"], row["mbid_b"])
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        try:
+            titles_a = [rg.get("title") or "" for rg in client.release_groups(row["mbid_a"])]
+            titles_b = [rg.get("title") or "" for rg in client.release_groups(row["mbid_b"])]
+        except Exception:  # noqa: BLE001 - detection must never fail the report
+            continue
+        shared = _rg_overlap(titles_a, titles_b)
+        if not shared:
+            continue
+        findings.append(
+            {
+                "artist_mbid_a": row["mbid_a"],
+                "name_a": row["name_a"],
+                "artist_mbid_b": row["mbid_b"],
+                "name_b": row["name_b"],
+                "shared_release_groups": shared,
+                "folders": sorted({row["folder_a"], row["folder_b"]}),
+                "suggested_action": (
+                    "same catalog under two MB entities; verify which is canonical on MB, "
+                    "then mb_apply action='retarget' from the duplicate into it (cache-only)"
+                ),
+            }
+        )
+    return findings
+
+
+def library_find_dupes(
+    conn: sqlite3.Connection, scope: str = "all", client=None
+) -> dict:
     # expose the Python normalizer to SQL for title grouping
     conn.create_function("_norm", 1, _norm_title)
     findings: dict[str, list] = defaultdict(list)
@@ -54,6 +137,10 @@ def library_find_dupes(conn: sqlite3.Connection, scope: str = "all") -> dict:
             """
         ).fetchall()
         findings["same_title_same_artist"] = [dict(r) for r in rows]
+
+    if scope == "artist_entities":
+        # explicit-only scope: it queries MB release-groups per artist pair
+        findings["artist_entities"] = _artist_entity_dupes(conn, client)
 
     if scope in ("folder", "all"):
         # file-level truth: a folder whose tracks carry >1 album identity

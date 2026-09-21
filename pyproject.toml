@@ -1,6 +1,6 @@
 [project]
 name = "self-hosted-music-mcp"
-version = "0.0.1"
+version = "0.1.0"
 description = "MCP server joining a local music library, ListenBrainz listens, and MusicBrainz metadata on permanent MBIDs."
 readme = "README.md"
 requires-python = ">=3.13"
