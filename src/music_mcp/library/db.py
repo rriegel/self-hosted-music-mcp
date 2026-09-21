@@ -10,6 +10,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from music_mcp.listens.credits import normalize_name
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
     key TEXT PRIMARY KEY,
@@ -124,6 +126,10 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    # SQL-side name normalization for joins (stale_library, playlist recency):
+    # same folding as the Python tier, so SQL LOWER() joins and credit resolution
+    # agree on what 'the same artist' means (U+2010 vs '-', case, punctuation).
+    conn.create_function("norm_name", 1, normalize_name)
     _ensure_schema_version(conn)
     return conn
 

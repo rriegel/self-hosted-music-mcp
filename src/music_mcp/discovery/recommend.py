@@ -6,7 +6,7 @@ import json
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from music_mcp.listens.credits import owned_name_index
+from music_mcp.listens.credits import normalize_name, owned_name_index
 
 LABS_BASE = "https://labs.api.listenbrainz.org"
 # Session-based algorithm from the proven release-radar script
@@ -56,7 +56,7 @@ def discovery_similar_artists(conn, artist_mbid: str, limit: int = 25, exclude: 
     items = similar_artists(artist_mbid, limit=limit * 2 if exclude == "owned" else limit)
     if exclude == "owned":
         owned = owned_name_index(conn)
-        items = [i for i in items if (i["name"] or "").lower() not in owned][:limit]
+        items = [i for i in items if normalize_name(i["name"] or "") not in owned][:limit]
         excluded = "owned artists"
     else:
         excluded = None
@@ -98,7 +98,7 @@ def discovery_recommendations(
                 """
                 SELECT a.artist_mbid, a.name, la.listen_count
                 FROM listened_artists la
-                JOIN artists a ON LOWER(a.name) = LOWER(la.artist_name)
+                JOIN artists a ON norm_name(a.name) = norm_name(la.artist_name)
                 WHERE a.artist_mbid IS NOT NULL AND la.listen_count >= ?
                 ORDER BY la.listen_count DESC LIMIT ?
                 """,
@@ -126,15 +126,15 @@ def discovery_recommendations(
 
     recs = []
     listened_names = {
-        row["artist_name"].lower()
+        normalize_name(row["artist_name"])
         for row in conn.execute("SELECT artist_name FROM listened_artists WHERE listen_count > 0")
     }
     for entry in scores.values():
         name = entry["name"] or ""
-        is_owned = name.lower() in owned
+        is_owned = normalize_name(name) in owned
         if filter_mode == "not_in_library" and is_owned:
             continue
-        if filter_mode == "in_library_unplayed" and (not is_owned or name.lower() in listened_names):
+        if filter_mode == "in_library_unplayed" and (not is_owned or normalize_name(name) in listened_names):
             continue  # must be owned AND never scrobbled
         if filter_mode == "all":
             pass

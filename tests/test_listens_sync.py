@@ -91,7 +91,7 @@ def test_gap_analysis_separates_owned_and_unowned(cache: sqlite3.Connection):
     refresh_listened_artists(cache)
 
     gap = reports.listens_gap_analysis(cache, min_listens=5)
-    names = {g["artist"] for g in gap["not_owned"]}
+    names = {g["artist"] for g in gap["true_gaps"]}
     assert "Ghost Artist" in names
     assert "Owned Band" not in names
 
@@ -106,15 +106,19 @@ def test_gap_splits_collab_credits(cache: sqlite3.Connection):
     refresh_listened_artists(cache)
 
     gap = reports.listens_gap_analysis(cache, min_listens=5)
-    names = {g["artist"] for g in gap["not_owned"]}
-    assert "Earl Sweatshirt, SURF GANG" not in names  # both parts owned → not a gap
-    assert "Ghost Artist" in names
+    all_flagged = {
+        g["artist"]
+        for b in ("true_gaps", "owned_but_unresolved", "junk_suspects")
+        for g in gap[b]
+    }
+    assert "Earl Sweatshirt, SURF GANG" not in all_flagged  # both parts owned → not a gap
+    assert "Ghost Artist" in {g["artist"] for g in gap["true_gaps"]}
     assert gap["matched_owned"] == 1
 
     # single owned part in a collab also counts as owned
     cache.execute("INSERT INTO listened_artists VALUES ('Earl Sweatshirt feat. Nobody', 5, 0, 0)")
     gap2 = reports.listens_gap_analysis(cache, min_listens=5)
-    assert "Earl Sweatshirt feat. Nobody" not in {g["artist"] for g in gap2["not_owned"]}
+    assert "Earl Sweatshirt feat. Nobody" not in {g["artist"] for g in gap2["true_gaps"]}
 
 
 def test_stale_library_uses_past_intensity(cache: sqlite3.Connection):
