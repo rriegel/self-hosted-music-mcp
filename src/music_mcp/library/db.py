@@ -102,6 +102,17 @@ CREATE TABLE IF NOT EXISTS mb_resolutions (
     status TEXT NOT NULL DEFAULT 'proposed',   -- proposed | applied | rejected | ambiguous
     proposed_at REAL NOT NULL
 );
+
+-- Watchlist (schema v4): MCP-owned artist watchlist for release radar / discovery.
+-- Imported from the Friday cron's watchlist.json; the cron keeps reading its own
+-- file — this table is the MCP-side source of truth.
+CREATE TABLE IF NOT EXISTS watchlist (
+    artist_mbid TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    sources TEXT NOT NULL DEFAULT '[]', -- JSON array: library | listenbrainz | similar
+    listen_count INTEGER NOT NULL DEFAULT 0,
+    added_at REAL NOT NULL
+);
 """
 
 
@@ -121,11 +132,11 @@ def _ensure_schema_version(conn: sqlite3.Connection) -> None:
     """Record the current schema version (idempotent upgrades, additive only)."""
     row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
     if row is None:
-        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '3')")
+        conn.execute("INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4')")
         conn.commit()
-    elif int(row["value"]) < 3:
-        # additive upgrades (v2 listens tables, v3 mb tables) are CREATE IF NOT EXISTS
-        conn.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'")
+    elif int(row["value"]) < 4:
+        # additive upgrades (v3 mb tables, v4 watchlist) are CREATE IF NOT EXISTS
+        conn.execute("UPDATE schema_meta SET value = '4' WHERE key = 'schema_version'")
         conn.commit()
 
 
