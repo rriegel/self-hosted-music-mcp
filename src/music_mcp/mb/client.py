@@ -16,6 +16,8 @@ from urllib.parse import quote
 
 import httpx
 
+from music_mcp.listens.credits import normalize_name, split_credit
+
 MB_BASE = "https://musicbrainz.org/ws/2"
 UA = "self-hosted-music-mcp/0.1.0 (https://github.com/rriegel/self-hosted-music-mcp)"
 RATE_SECONDS = 1.1
@@ -24,6 +26,45 @@ CACHE_TTL_SECONDS = 30 * 86400  # 30 days; MB entity data is effectively immutab
 
 def cache_key(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
+
+
+def _has_credit_separator(name: str | None) -> bool:
+    """Does this artist name/alias look like a concatenated credit string?
+
+    A ';' is unambiguous — MB never stores it in a real artist name. The
+    remaining credit separators (',', '&', 'feat', ...) only count when the
+    name has 2+ words, so bare names containing them ('&!', 'The ', etc.) are
+    safe.
+    """
+    if not name:
+        return False
+    if ";" in name:
+        return True
+    words = name.split()
+    return len(words) >= 2 and any(sep in name for sep in (",", "&", "×"))
+
+
+def _prefer_name_or_alias_match(candidates: list[dict], query: str) -> list[dict]:
+    """Re-rank so a name/alias EQUALITY match beats higher-scored noise.
+
+    Case 1: any candidate whose stored name equals the query → those first
+    (still score-ordered among themselves).
+    Case 2: none by name, but some candidate has the query as an exact alias
+    (case-folded) → those next. This is the 'Mos Def' fix: the true artist
+    (Yasiin Bey) listed 'Mos Def' as an alias while the 100-scored 'The YMD'
+    only matched via the 'Yah Mos Def' SUBSTRING.
+    Case 3: no equality anywhere → original score order untouched.
+    """
+    q = query.casefold()
+    by_name = [a for a in candidates if (a.get("name") or "").casefold() == q]
+    if by_name:
+        rest = [a for a in candidates if a not in by_name]
+        return by_name + rest
+    by_alias = [a for a in candidates if any((al.get("name") or "").casefold() == q for al in (a.get("aliases") or []))]
+    if by_alias:
+        rest = [a for a in candidates if a not in by_alias]
+        return by_alias + rest
+    return candidates
 
 
 class MBClient:
@@ -95,18 +136,50 @@ class MBClient:
         the old name as an alias. The plain query searches aliases too, so we
         run it as fallback and merge candidates (deduped by id, keeping the
         higher score).
+
+        Two ranking rules fix real 2026-09-21 dogfood failures:
+
+        1. **Name/alias equality outranks score.** MB's score can rank an
+           alias-SUBSTRING match above the true artist: 'Mos Def' returned
+           'The YMD' at 100 (alias 'Yah Mos Def') while 'Yasiin Bey' sat at 76
+           with the exact alias 'Mos Def'. A candidate whose stored name or any
+           alias equals the query (case-folded) is preferred regardless of
+           score; equality against the *stored name* beats equality via alias.
+        2. **Concatenated-credit entities are dropped.** MB indexes some
+           collab credits as their own artist ('Talib Kweli & Mos Def',
+           'Mike & The Mechanics') whose stored NAME carries a credit
+           separator; those candidates are removed when the query itself is a
+           single artist name (aliases are NOT filtered — real artists often
+           carry credit-style aliases).
         """
+        parts = split_credit(name)
+        name_is_compound = len(parts) > 1
         field_data = self._search_raw(f'artist:"{name}"', limit)
         by_id: dict[str, dict] = {}
         for a in field_data.get("artists", []):
             by_id[a["id"]] = a
-        if len(by_id) < limit:
-            plain_data = self._search_raw(name, limit)
+        # skip the plain fallback when the field query already returned the
+        # artist by stored name — nothing better exists (saves one MB request)
+        field_name_hit = any(
+            normalize_name(a.get("name") or "") == normalize_name(name) for a in by_id.values()
+        )
+        if not field_name_hit:
+            # wider page than the returned limit: MB's top-3 can be all
+            # substring noise ('MIKE' at limit 3 → only Mike Oldfield et al.,
+            # the real MIKE sits at 88 of 10); same request count, bigger page
+            plain_data = self._search_raw(name, max(limit, 10))
             for a in plain_data.get("artists", []):
                 current = by_id.get(a["id"])
                 if current is None or int(a.get("score") or 0) > int(current.get("score") or 0):
                     by_id[a["id"]] = a
+
+        if not name_is_compound:
+            by_id = {
+                mid: a for mid, a in by_id.items() if not _has_credit_separator(a.get("name"))
+            }
+
         merged = sorted(by_id.values(), key=lambda a: -int(a.get("score") or 0))
+        merged = _prefer_name_or_alias_match(merged, name)
         return {"artists": merged[:limit]}
 
     def _search_raw(self, query: str, limit: int) -> dict:

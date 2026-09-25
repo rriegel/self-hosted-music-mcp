@@ -156,10 +156,24 @@ uv run python -m music_mcp.mb apply                       # write confident prop
   confidence label (`exact` / `case-insensitive` / `fuzzy` / `none`). Expect several
   minutes for a full library (MB rate limit); every response is cached, so re-runs
   are free.
+- Candidate ranking trusts name/alias **equality** over MB's score: a substring
+  alias hit scored 100 ('Mos Def' → The YMD) no longer outranks the real artist
+  that carries the exact alias (Yasiin Bey), and collab supergroups stored in MB
+  ('Mike & The Mechanics') are dropped from single-name searches. Only equality
+  against the whole name or a split part counts; bare substring hits propose
+  nothing rather than risk a wrong auto-apply.
+- Collab folders (`A;B`) resolve to a name-verified member at best — and always as
+  `needs_review`, since two artists share the folder. Prefix matches (`Ama` vs
+  `Ama Lou`) never label themselves `exact`; they propose nothing for review.
 - `apply` writes only confident matches (exact/case-insensitive name at score ≥95)
   into the **index** — it never writes to your audio files' tags. Applied MBIDs
   survive `--full` rescans (files that later gain real tags win). Fuzzy and
-  part-match proposals stay unapplied for your review.
+  part-match proposals stay unapplied for your review. One MBID binds to one
+  folder-artist: a second artist proposing the same MBID is skipped with a
+  `retarget` hint instead of silently merged.
+- `resolve` counters describe the current run (new candidates, re-visited rows with
+  decisions preserved, unresolved artists named) — stale rows never resurface in
+  the output.
 - `resolve`/`apply` refuse empty indexes, so a misplaced `MUSIC_DB` announces itself
   instead of returning a happy empty result.
 
